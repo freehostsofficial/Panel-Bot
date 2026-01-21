@@ -1,8 +1,8 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 
 async function loadMessageCommands(client, color) {
-  const commandsRoot = path.join(process.cwd(), "Src", "Commands", "Message");
+  const commandsRoot = path.join(process.cwd(), 'Src', 'Commands', 'Message');
 
   if (!fs.existsSync(commandsRoot)) {
     console.error(`[MESSAGE COMMANDS] Folder not found: ${commandsRoot}`);
@@ -20,7 +20,7 @@ async function loadMessageCommands(client, color) {
   for (const folder of commandFolders) {
     const folderPath = path.join(commandsRoot, folder);
     const commandFiles = fs.readdirSync(folderPath, { withFileTypes: true })
-      .filter(f => f.isFile() && f.name.endsWith(".js"))
+      .filter(f => f.isFile() && f.name.endsWith('.js'))
       .map(f => f.name);
 
     for (const fileName of commandFiles) {
@@ -34,7 +34,9 @@ async function loadMessageCommands(client, color) {
         continue;
       }
 
-      if (!command?.data?.name) continue;
+      if (!command?.data?.name) {
+        continue;
+      }
 
       client.messageCommands.set(command.data.name, command);
       publicCommandsArray.push(command.data.toJSON());
@@ -46,7 +48,7 @@ async function loadMessageCommands(client, color) {
     await client.application.commands.set(publicCommandsArray);
     console.log(`[GLOBAL COMMANDS] Loaded ${loadedCount} message commands successfully`);
   } catch (err) {
-    console.error("[GLOBAL COMMANDS] Failed to register message commands", err);
+    console.error('[GLOBAL COMMANDS] Failed to register message commands', err);
   }
 }
 

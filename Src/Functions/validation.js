@@ -10,14 +10,16 @@
  * @returns {string} - Sanitized string
  */
 function sanitizeSQLString(input) {
-  if (typeof input !== 'string') return String(input);
-  
+  if (typeof input !== 'string') {
+    return String(input);
+  }
+
   // Remove null bytes
   let sanitized = input.replace(/\0/g, '');
-  
+
   // Escape single quotes
   sanitized = sanitized.replace(/'/g, "''");
-  
+
   return sanitized;
 }
 
@@ -28,8 +30,10 @@ function sanitizeSQLString(input) {
  * @returns {boolean} - True if valid, false otherwise
  */
 function isValidTableName(tableName) {
-  if (typeof tableName !== 'string') return false;
-  
+  if (typeof tableName !== 'string') {
+    return false;
+  }
+
   // Only allow alphanumeric and underscores, 1-64 characters
   return /^[a-zA-Z0-9_]{1,64}$/.test(tableName);
 }
@@ -41,8 +45,10 @@ function isValidTableName(tableName) {
  * @returns {boolean} - True if valid, false otherwise
  */
 function isValidColumnName(columnName) {
-  if (typeof columnName !== 'string') return false;
-  
+  if (typeof columnName !== 'string') {
+    return false;
+  }
+
   // Only allow alphanumeric and underscores, 1-64 characters
   return /^[a-zA-Z0-9_]{1,64}$/.test(columnName);
 }
@@ -54,7 +60,7 @@ function isValidColumnName(columnName) {
  */
 function isValidDiscordId(id) {
   const idStr = String(id);
-  
+
   // Discord snowflakes are 17-19 digits
   return /^\d{17,19}$/.test(idStr);
 }
@@ -196,7 +202,7 @@ function validateURL(input, options = {}) {
 
   try {
     const url = new URL(input);
-    
+
     if (!allowedProtocols.includes(url.protocol)) {
       result.error = `Protocol must be one of: ${allowedProtocols.join(', ')}`;
       return result;
@@ -217,25 +223,27 @@ function validateURL(input, options = {}) {
  * @returns {string} - Sanitized filename
  */
 function sanitizeFilename(filename) {
-  if (typeof filename !== 'string') return 'file';
-  
+  if (typeof filename !== 'string') {
+    return 'file';
+  }
+
   // Remove directory traversal attempts
   let safe = filename.replace(/\.\./g, '');
-  
+
   // Remove path separators
   safe = safe.replace(/[\/\\]/g, '');
-  
+
   // Remove null bytes
   safe = safe.replace(/\0/g, '');
-  
+
   // Only allow safe characters
   safe = safe.replace(/[^a-zA-Z0-9._-]/g, '_');
-  
+
   // Limit length
   if (safe.length > 255) {
     safe = safe.substring(0, 255);
   }
-  
+
   return safe || 'file';
 }
 

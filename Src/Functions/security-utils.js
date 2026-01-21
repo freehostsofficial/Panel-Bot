@@ -116,7 +116,9 @@ function verifyPermissionLevel(userId, allowedIds, level = 'required') {
  * @returns {string} - Escaped text
  */
 function escapeMarkdown(text) {
-  if (typeof text !== 'string') return String(text);
+  if (typeof text !== 'string') {
+    return String(text);
+  }
 
   return text
     .replace(/\\/g, '\\\\')
@@ -181,7 +183,7 @@ function validateRequiredConfig(config, requiredKeys) {
  * @returns {NodeJS.Timeout} - Timeout handle
  */
 function safeSetTimeout(callback, ms) {
-  const MAX_TIMEOUT = 2147483647; 
+  const MAX_TIMEOUT = 2147483647;
   const safeMs = Math.min(ms, MAX_TIMEOUT);
   return setTimeout(callback, safeMs);
 }

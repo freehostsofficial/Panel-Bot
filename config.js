@@ -24,7 +24,9 @@ function safeReadJson(filePath) {
 }
 
 function findKeyCaseInsensitive(obj, key) {
-  if (!obj || typeof obj !== 'object') return key;
+  if (!obj || typeof obj !== 'object') {
+    return key;
+  }
   const lower = String(key).toLowerCase();
   const found = Object.keys(obj).find(k => k.toLowerCase() === lower);
   return found || key;
@@ -33,7 +35,9 @@ function findKeyCaseInsensitive(obj, key) {
 function getNestedCaseInsensitive(obj, parts) {
   let cur = obj;
   for (const p of parts) {
-    if (cur == null || typeof cur !== 'object') return undefined;
+    if (cur == null || typeof cur !== 'object') {
+      return undefined;
+    }
     const key = findKeyCaseInsensitive(cur, p);
     cur = cur[key];
   }
@@ -41,14 +45,26 @@ function getNestedCaseInsensitive(obj, parts) {
 }
 
 function parseValue(str, preserve) {
-  if (typeof str !== 'string') return str;
+  if (typeof str !== 'string') {
+    return str;
+  }
   const v = str.trim();
-  if (preserve) return v;
-  if (/^(true|false)$/i.test(v)) return v.toLowerCase() === 'true';
-  if (/^-?\d+$/.test(v)) return parseInt(v, 10);
-  if (/^-?\d+\.\d+$/.test(v)) return parseFloat(v);
+  if (preserve) {
+    return v;
+  }
+  if (/^(true|false)$/i.test(v)) {
+    return v.toLowerCase() === 'true';
+  }
+  if (/^-?\d+$/.test(v)) {
+    return parseInt(v, 10);
+  }
+  if (/^-?\d+\.\d+$/.test(v)) {
+    return parseFloat(v);
+  }
   if (/^[\[{]/.test(v)) {
-    try { return JSON.parse(v); } catch { }
+    try {
+      return JSON.parse(v);
+    } catch { }
   }
   return v;
 }
@@ -67,7 +83,13 @@ function setNested(obj, parts, value) {
 
       if (forceArray) {
         parsed = value.trim().startsWith('[')
-          ? (() => { try { return JSON.parse(value); } catch { return []; } })()
+          ? (() => {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return [];
+            }
+          })()
           : value.split(',').map(v => parseValue(v, preserve));
       } else {
         parsed = parseValue(value, preserve);
@@ -77,7 +99,9 @@ function setNested(obj, parts, value) {
       return;
     }
 
-    if (!cur[key] || typeof cur[key] !== 'object') cur[key] = {};
+    if (!cur[key] || typeof cur[key] !== 'object') {
+      cur[key] = {};
+    }
     cur = cur[key];
   }
 }
@@ -85,10 +109,14 @@ function setNested(obj, parts, value) {
 function applyEnv(json, name) {
   const up = name.toUpperCase();
   for (const [k, v] of Object.entries(process.env)) {
-    if (!v || !k.startsWith(up)) continue;
+    if (!v || !k.startsWith(up)) {
+      continue;
+    }
     const parts = k.split(/[-_]/);
     parts.shift();
-    if (parts.length) setNested(json, parts, v);
+    if (parts.length) {
+      setNested(json, parts, v);
+    }
   }
 }
 
@@ -103,7 +131,9 @@ const cache = new Map();
 const watchers = new Map();
 
 function watch(filePath, name) {
-  if (watchers.has(filePath)) return;
+  if (watchers.has(filePath)) {
+    return;
+  }
   try {
     const w = fs.watch(filePath, { persistent: false }, () => {
       const { data } = loadConfigFile(name);
@@ -128,7 +158,9 @@ function get(pathStr, def) {
   const parts = String(pathStr).split('.');
   const root = parts.shift();
   const base = cache.get(root);
-  if (parts.length === 0) return base ?? def;
+  if (parts.length === 0) {
+    return base ?? def;
+  }
   const val = getNestedCaseInsensitive(base, parts);
   return val ?? def;
 }
@@ -156,11 +188,11 @@ function validateCriticalConfig() {
   }
 
   if (missing.length > 0) {
-    const errorMsg = `\n❌ CRITICAL CONFIGURATION ERROR:\n` +
-      `Missing required configuration values:\n` +
+    const errorMsg = '\n❌ CRITICAL CONFIGURATION ERROR:\n' +
+      'Missing required configuration values:\n' +
       missing.map(k => `  - ${k}`).join('\n') + '\n\n' +
-      `Please check your .env file or environment variables.\n` +
-      `See .env.example for required configuration.\n`;
+      'Please check your .env file or environment variables.\n' +
+      'See .env.example for required configuration.\n';
 
     if (PRODUCTION) {
       // Fail-fast in production
@@ -172,7 +204,9 @@ function validateCriticalConfig() {
 }
 
 function reload(name) {
-  if (!name) return loadAll(DEFAULTS);
+  if (!name) {
+    return loadAll(DEFAULTS);
+  }
   const { data } = loadConfigFile(name);
   cache.set(name, data);
   emitter.emit('reload', name, data);

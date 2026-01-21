@@ -13,7 +13,9 @@ class DatabaseManager {
    * Initialize database by reading database.json
    */
   async initialize() {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
     try {
       const dir = path.dirname(this.dataPath);
       if (!fs.existsSync(dir)) {
@@ -55,7 +57,9 @@ class DatabaseManager {
   }
 
   async _wait() {
-    if (!this.initialized) await this.initialize();
+    if (!this.initialized) {
+      await this.initialize();
+    }
   }
 
   /**
