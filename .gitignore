@@ -143,3 +143,6 @@ temp/
 # Config files with secrets (keep templates only)
 config/local.json
 config/production.json
+
+# Bot Database
+Src/Data/

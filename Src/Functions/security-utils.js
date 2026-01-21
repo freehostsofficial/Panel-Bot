@@ -24,54 +24,6 @@ function sanitizeErrorMessage(error, isDevelopment = false) {
 }
 
 /**
- * Sanitize data for logging
- * Removes sensitive fields like tokens, passwords, etc.
- * @param {object} data - The data to sanitize
- * @returns {object} - Sanitized data safe for logging
- */
-function sanitizeForLogging(data) {
-  if (!data || typeof data !== 'object') return data;
-
-  const sensitiveKeys = [
-    'token',
-    'password',
-    'secret',
-    'apikey',
-    'api_key',
-    'authorization',
-    'cookie',
-    'session'
-  ];
-
-  const sanitized = Array.isArray(data) ? [...data] : { ...data };
-
-  function recursiveSanitize(obj) {
-    if (!obj || typeof obj !== 'object') return obj;
-
-    const result = Array.isArray(obj) ? [] : {};
-
-    for (const [key, value] of Object.entries(obj)) {
-      const lowerKey = String(key).toLowerCase();
-      
-      // Check if this is a sensitive key
-      const isSensitive = sensitiveKeys.some(sk => lowerKey.includes(sk));
-      
-      if (isSensitive) {
-        result[key] = '[REDACTED]';
-      } else if (value && typeof value === 'object') {
-        result[key] = recursiveSanitize(value);
-      } else {
-        result[key] = value;
-      }
-    }
-
-    return result;
-  }
-
-  return recursiveSanitize(sanitized);
-}
-
-/**
  * Simple rate limiter using Map
  * @param {Map} store - The Map to store rate limit data
  * @param {string} key - Unique identifier (user ID, IP, etc.)
@@ -165,7 +117,7 @@ function verifyPermissionLevel(userId, allowedIds, level = 'required') {
  */
 function escapeMarkdown(text) {
   if (typeof text !== 'string') return String(text);
-  
+
   return text
     .replace(/\\/g, '\\\\')
     .replace(/\*/g, '\\*')
@@ -229,14 +181,13 @@ function validateRequiredConfig(config, requiredKeys) {
  * @returns {NodeJS.Timeout} - Timeout handle
  */
 function safeSetTimeout(callback, ms) {
-  const MAX_TIMEOUT = 2147483647; // Maximum 32-bit signed integer
+  const MAX_TIMEOUT = 2147483647; 
   const safeMs = Math.min(ms, MAX_TIMEOUT);
   return setTimeout(callback, safeMs);
 }
 
 module.exports = {
   sanitizeErrorMessage,
-  sanitizeForLogging,
   checkRateLimit,
   cleanupRateLimits,
   verifyPermissionLevel,

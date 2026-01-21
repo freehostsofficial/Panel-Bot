@@ -7,12 +7,12 @@ const {
 } = require("discord.js");
 
 const config = require("../../../config");
+const { checkAccess } = require("../../Handlers/accessHandler");
 const {
   getPermissionLabel,
   DEFAULT_BOT_PERMISSIONS,
   DEFAULT_USER_PERMISSIONS,
 } = require("../../Functions/permissions");
-const { logger } = require("../../Functions/logger");
 
 const BASE_USER_PERMS = [...DEFAULT_USER_PERMISSIONS];
 const BASE_BOT_PERMS = [...DEFAULT_BOT_PERMISSIONS];
@@ -72,6 +72,10 @@ module.exports = {
           withResponse: false,
         });
       }
+
+      // Perform centralized access check
+      const hasAccess = await checkAccess(interaction);
+      if (!hasAccess) return;
 
       /* ───────── FLAGS ───────── */
       const {
@@ -329,7 +333,7 @@ module.exports = {
         })
         .setTimestamp();
 
-      await logger.command({ client, embed: successEmbed });
+      // Logger removed: await logger.command({ client, embed: successEmbed });
     } catch (err) {
       console.error("❌ Interaction error:", err);
 
@@ -346,7 +350,7 @@ module.exports = {
         } else {
           await interaction.followUp(replyOpts);
         }
-      } catch {}
+      } catch { }
     }
   },
 };

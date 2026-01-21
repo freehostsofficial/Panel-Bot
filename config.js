@@ -48,7 +48,7 @@ function parseValue(str, preserve) {
   if (/^-?\d+$/.test(v)) return parseInt(v, 10);
   if (/^-?\d+\.\d+$/.test(v)) return parseFloat(v);
   if (/^[\[{]/.test(v)) {
-    try { return JSON.parse(v); } catch {}
+    try { return JSON.parse(v); } catch { }
   }
   return v;
 }
@@ -111,7 +111,7 @@ function watch(filePath, name) {
       emitter.emit('reload', name, data);
     });
     watchers.set(filePath, w);
-  } catch {}
+  } catch { }
 }
 
 function loadAll(names) {
@@ -140,10 +140,10 @@ function get(pathStr, def) {
 function validateCriticalConfig() {
   const missing = [];
   const warnings = [];
-  
+
   for (const key of CRITICAL_KEYS) {
     const value = get(key);
-    
+
     if (value === undefined || value === null || value === '') {
       missing.push(key);
     } else if (typeof value === 'string' && (
@@ -154,30 +154,20 @@ function validateCriticalConfig() {
       warnings.push(`${key} appears to be a placeholder value`);
     }
   }
-  
+
   if (missing.length > 0) {
     const errorMsg = `\n❌ CRITICAL CONFIGURATION ERROR:\n` +
       `Missing required configuration values:\n` +
       missing.map(k => `  - ${k}`).join('\n') + '\n\n' +
       `Please check your .env file or environment variables.\n` +
       `See .env.example for required configuration.\n`;
-    
+
     if (PRODUCTION) {
       // Fail-fast in production
       console.error(errorMsg);
       process.exit(1);
-    } else {
-      // Warn in development
-      console.warn(errorMsg);
     }
   }
-  
-  if (warnings.length > 0) {
-    console.warn('\n⚠️  Configuration warnings:');
-    warnings.forEach(w => console.warn(`  - ${w}`));
-    console.warn('');
-  }
-  
   return { valid: missing.length === 0, missing, warnings };
 }
 
@@ -188,16 +178,8 @@ function reload(name) {
   emitter.emit('reload', name, data);
 }
 
-const DEFAULTS = ['settings', 'embed', 'server', 'logs', 'api'];
+const DEFAULTS = ['settings', 'embed', 'server', 'api'];
 loadAll(DEFAULTS);
-
-// Validate configuration on load (with small delay to ensure env vars are loaded)
-setTimeout(() => {
-  const validation = validateCriticalConfig();
-  if (validation.valid) {
-    console.log('✅ Configuration validated successfully');
-  }
-}, 100);
 
 module.exports = {
   get,

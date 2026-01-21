@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { logger } = require('../Functions/logger');
+// Logger removed: const { logger } = require('../Functions/logger');
 const { formatBytes, formatUptime } = require('../Functions/format-utils');
 
 // Track crash occurrences to prevent crash loops
@@ -36,17 +36,17 @@ function loadAntiCrash(client) {
   // Handle unhandled promise rejections
   process.on("unhandledRejection", async (reason, promise) => {
     console.error("[AntiCrash] Unhandled Rejection:", reason);
-    
+
     // Track crashes
     resetTrackerIfNeeded();
     crashTracker.count++;
-    
+
     // If too many crashes, exit process
     if (isCrashLimitExceeded()) {
       console.error(`[AntiCrash] Too many crashes (${crashTracker.count}). Exiting to prevent crash loop.`);
       process.exit(1);
     }
-    
+
     // Log to Discord if client is available
     if (client?.user) {
       try {
@@ -63,7 +63,7 @@ function loadAntiCrash(client) {
           .addFields(
             {
               name: "🔍 Error Details",
-              value: 
+              value:
                 `\`\`\`js\n` +
                 `${String(reason).substring(0, 500)}${String(reason).length > 500 ? '...' : ''}\n` +
                 `\`\`\``,
@@ -96,13 +96,15 @@ function loadAntiCrash(client) {
           })
           .setTimestamp();
 
+        /* Logger removed:
         await logger.error({
           client,
           embed: errorEmbed,
           error: reason instanceof Error ? reason : new Error(String(reason))
         });
+        */
       } catch (logError) {
-        console.error('[AntiCrash] Failed to log rejection:', logError);
+        console.error('[AntiCrash] Failed to log reaction:', logError);
       }
     }
   });
@@ -110,11 +112,11 @@ function loadAntiCrash(client) {
   // Handle uncaught exceptions
   process.on("uncaughtException", async (error) => {
     console.error("[AntiCrash] Uncaught Exception:", error);
-    
+
     // Track crashes
     resetTrackerIfNeeded();
     crashTracker.count++;
-    
+
     // Log to Discord if client is available
     if (client?.user) {
       try {
@@ -173,16 +175,12 @@ function loadAntiCrash(client) {
           })
           .setTimestamp();
 
-        await logger.error({
-          client,
-          embed: errorEmbed,
-          error
-        });
+        // Logger removed: await logger.error({ client, embed: errorEmbed, error });
       } catch (logError) {
         console.error('[AntiCrash] Failed to log exception:', logError);
       }
     }
-    
+
     // For critical errors, exit after logging
     if (isCrashLimitExceeded()) {
       console.error(`[AntiCrash] Too many crashes (${crashTracker.count}). Exiting.`);
@@ -201,7 +199,7 @@ function loadAntiCrash(client) {
   if (client) {
     client.on("error", async (error) => {
       console.error("[Discord Client Error]", error);
-      
+
       try {
         const errorEmbed = new EmbedBuilder()
           .setAuthor({
@@ -249,11 +247,13 @@ function loadAntiCrash(client) {
           })
           .setTimestamp();
 
+        /* Logger removed:
         await logger.error({
           client,
           embed: errorEmbed,
           error
         });
+        */
       } catch (logError) {
         console.error('[AntiCrash] Failed to log client error:', logError);
       }
@@ -261,7 +261,7 @@ function loadAntiCrash(client) {
 
     client.on("shardError", async (error, shardId) => {
       console.error(`[Discord Shard Error] Shard ${shardId}:`, error);
-      
+
       try {
         const errorEmbed = new EmbedBuilder()
           .setAuthor({
@@ -310,17 +310,19 @@ function loadAntiCrash(client) {
           })
           .setTimestamp();
 
+        /* Logger removed:
         await logger.error({
           client,
           embed: errorEmbed,
           error
         });
+        */
       } catch (logError) {
         console.error('[AntiCrash] Failed to log shard error:', logError);
       }
     });
   }
-  
+
   console.log('✅ Anti-crash handlers initialized');
 }
 

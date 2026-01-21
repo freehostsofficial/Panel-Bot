@@ -1,8 +1,8 @@
 const { ActivityType, EmbedBuilder } = require("discord.js");
 const fs = require("fs").promises;
 const path = require("path");
-const { logger } = require("../../Functions/logger");
 const { formatUptime, formatBytes } = require("../../Functions/format-utils");
+const db = require("../../Functions/database");
 const colors = require("colors");
 
 // Cache for performance
@@ -14,6 +14,9 @@ module.exports = {
 
   async execute(client) {
     try {
+      // Initialize database
+      await db.instance.initialize();
+
       // Load settings with caching
       if (!settingsCache.loaded) {
         const SETTINGS_PATH = path.resolve(
@@ -51,13 +54,6 @@ module.exports = {
     } catch (err) {
       console.error("ClientReady error:", err);
 
-      const errorEmbed = new EmbedBuilder()
-        .setTitle("❌ Client Ready Error")
-        .setDescription(`\`\`\`${err.message}\`\`\``)
-        .setColor(0xff0000)
-        .setTimestamp();
-
-      logger.error({ client, embed: errorEmbed }).catch(() => {});
     }
   },
 
@@ -221,7 +217,7 @@ module.exports = {
         .addFields(
           {
             name: "📊 Server Statistics",
-            value: 
+            value:
               `\`\`\`yml\n` +
               `Guilds:   ${totalGuilds.toLocaleString()}\n` +
               `Users:    ${totalUsers.toLocaleString()}\n` +
@@ -266,7 +262,7 @@ module.exports = {
         })
         .setTimestamp();
 
-      await logger.client({ client, embed });
+      // Logger removed: await logger.client({ client, embed });
     } catch (err) {
       console.error("Failed to send ready embed:", err.message);
     }
