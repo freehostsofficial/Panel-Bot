@@ -1,0 +1,220 @@
+{
+  "bot": {
+    "token": "",
+    "clientid": "",
+    "clientsecret": ""
+  },
+  "developer": {
+    "ids": [""],
+    "owner_ids": [""],
+    "guildids": [""]
+  },
+
+  "statusrotationintervalms": 30000,
+  "statuses": [
+    {
+      "text": "Serving {guilds} servers",
+      "type": "Watching",
+      "status": "online"
+    },
+    { "text": "with {users} users", "type": "Playing", "status": "online" },
+    {
+      "text": "Moderating {guilds} communities",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Keeping the vibes immaculate ✨",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Taking a byte out of lag 🦾",
+      "type": "Competing",
+      "status": "online"
+    },
+    { "text": "Charging… 99% done ⚡", "type": "Playing", "status": "idle" },
+    { "text": "Pretending to work 🤖", "type": "Playing", "status": "idle" },
+    {
+      "text": "Reading your mind... wait, no WiFi 📡",
+      "type": "Watching",
+      "status": "idle"
+    },
+    {
+      "text": "I swear I didn’t crash this time 😅",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Waiting for someone to say /info help",
+      "type": "Listening",
+      "status": "online"
+    },
+    {
+      "text": "Debugging reality itself 🪲",
+      "type": "Competing",
+      "status": "dnd"
+    },
+    {
+      "text": "Serving fresh memes daily 🍕",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Counting {users} humans... and 2 bots",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Currently questioning existence 💭",
+      "type": "Playing",
+      "status": "idle"
+    },
+    {
+      "text": "Running on pure caffeine ☕",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Did someone say cookies? 🍪",
+      "type": "Listening",
+      "status": "online"
+    },
+    {
+      "text": "Buffering witty remark...",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Talking to the database 💬",
+      "type": "Competing",
+      "status": "online"
+    },
+    { "text": "Uptime: {uptime}", "type": "Watching", "status": "online" },
+    {
+      "text": "Memory check: {memory}",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Bot v{version} — stable-ish 🤓",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Hello there 👋 (General Kenobi!)",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Survived another restart 💪",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Analyzing {guilds} guilds... be afraid 👀",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Shards united: {shards}",
+      "type": "Watching",
+      "status": "online"
+    },
+    { "text": "Existence confirmed ✅", "type": "Playing", "status": "online" },
+    {
+      "text": "Upgrading personality.dll",
+      "type": "Playing",
+      "status": "online"
+    },
+    { "text": "Currently vibing 🎶", "type": "Listening", "status": "online" },
+    {
+      "text": "Because AI deserves a break too 😌",
+      "type": "Playing",
+      "status": "idle"
+    },
+    { "text": "My devs are watching 👀", "type": "Watching", "status": "dnd" },
+    {
+      "text": "⚡ {totalcommands} commands | {slashcommands} slash cmds loaded",
+      "type": "Playing",
+      "status": "online"
+    },
+    { "text": "Invite me: /invite", "type": "Listening", "status": "online" },
+    {
+      "text": "Voice: {activevoice} users • {queuelength} in queue",
+      "type": "Competing",
+      "status": "online"
+    },
+    {
+      "text": "Ho ho ho! I'm checking the naughty list... {guilds} servers so far 🎅",
+      "type": "Watching",
+      "status": "online"
+    },
+    {
+      "text": "Santa tested my uptime: {uptime} — certified reindeer approved 🦌",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Why did the ornament go to school? It wanted to be a little 'brighter' 🎄",
+      "type": "Playing",
+      "status": "idle"
+    },
+    {
+      "text": "Deck the halls — but first, queue the music: {nowplaying}",
+      "type": "Listening",
+      "status": "online"
+    },
+    {
+      "text": "All I want for Christmas is... fewer bugs! 🐞",
+      "type": "Competing",
+      "status": "dnd"
+    },
+
+    {
+      "text": "Booting up Developer Mode 💻",
+      "type": "Competing",
+      "status": "online"
+    },
+    {
+      "text": "Dev joke: Why do programmers prefer dark mode? Because light attracts bugs 🪲",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Dev joke: There are 10 types of people — those who understand binary and those who don’t 💻",
+      "type": "Playing",
+      "status": "idle"
+    },
+    {
+      "text": "Dev joke: I would tell you a UDP joke, but you might not get it 📡",
+      "type": "Listening",
+      "status": "idle"
+    },
+    {
+      "text": "Dev joke: My code never has bugs — it just develops random features 🧠",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Dev joke: To err is human — to blame it on a computer is even better 🤖",
+      "type": "Playing",
+      "status": "dnd"
+    },
+    {
+      "text": "Dev joke: I changed the world today — deleted production database 😅",
+      "type": "Playing",
+      "status": "idle"
+    },
+    {
+      "text": "Dev joke: Real developers count from 0 🧮",
+      "type": "Playing",
+      "status": "online"
+    },
+    {
+      "text": "Maintained by our amazing devs: {devs} 💪",
+      "type": "Watching",
+      "status": "online"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "defaultWebhook": null,
+  "defaultChannelId": null,
+  "errorLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "commandLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "guildLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "shardLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "clientLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "banLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  },
+  "serverLogs": {
+    "enabled": true,
+    "webhook": "",
+    "channelId": ""
+  }
+}

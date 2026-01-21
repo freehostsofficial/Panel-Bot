@@ -1,0 +1,11 @@
+{
+  "postgres": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "CONFIGURE_IN_ENV_FILE",
+    "password": "CONFIGURE_IN_ENV_FILE",
+    "database": "CONFIGURE_IN_ENV_FILE",
+    "noVerifySSL": true,
+    "applicationName": "Discord Bot Template"
+  }
+}
