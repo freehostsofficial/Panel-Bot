@@ -46,12 +46,11 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     let servers;
-    const panelsToSearch = panelName
-      ? userData.panels.filter(p => p.name === panelName)
-      : userData.panels;
-
     try {
-      servers = await ptero.getAllServers(panelsToSearch);
+      const allServers = await pteroUtils.getUserServers(userId);
+      servers = panelName
+        ? allServers.filter(s => s.panel.name === panelName)
+        : allServers;
     } catch (err) {
       const errorEmbed = handleApiError(err, 'Server Manager', 'fetch servers');
       return interaction.editReply({ embeds: [errorEmbed] });
@@ -151,7 +150,8 @@ module.exports = {
     };
 
     const buildDetailView = async (combinedId) => {
-      const [pName, srvId] = combinedId.split(':');
+      const pName = pteroUtils.extractPanelName(combinedId);
+      const srvId = pteroUtils.extractServerId(combinedId);
       const panel = userData.panels.find(p => p.name === pName);
       activeServerId = srvId;
       activePanel = panel;
@@ -245,7 +245,8 @@ module.exports = {
           const parts = i.customId.split('_');
           const action = parts[1];
           const combinedId = parts.slice(2).join('_');
-          const [pName, srvId] = combinedId.split(':');
+          const pName = pteroUtils.extractPanelName(combinedId);
+          const srvId = pteroUtils.extractServerId(combinedId);
           const panel = userData.panels.find(p => p.name === pName);
 
           if (action === 'refresh') {

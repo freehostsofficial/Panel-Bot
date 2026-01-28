@@ -1,186 +1,496 @@
 const { EmbedBuilder } = require('discord.js');
 
-function isFeatureDisabledError(error) {
-  const errorMessage = error.message?.toLowerCase() || '';
-  const disabledKeywords = [
-    'not authorized',
-    'permission denied',
-    'forbidden',
-    'feature is disabled',
-    'not allowed',
-    'restricted',
-    'insufficient permissions',
-    'access denied',
-    'disabled by administrator',
-    'backup limit reached',
-    'database limit reached'
-  ];
-
-  return disabledKeywords.some(keyword => errorMessage.includes(keyword));
-}
-
-function createFeatureDisabledEmbed(featureName, action) {
-  return new EmbedBuilder()
-    .setColor('#ff6600')
-    .setTitle('🚫 Feature Restricted')
-    .setDescription(`The **${featureName}** feature appears to be restricted on this panel.`)
-    .addFields(
-      {
-        name: '❓ Why is this happening?',
-        value: 'Your hosting provider may have disabled this feature for users, or you may have reached your limit.'
-      },
-      {
-        name: '💡 What can you do?',
-        value: `• Contact your hosting provider for assistance\n• Check if you have permission for this action\n• Verify your plan includes ${featureName.toLowerCase()}\n• Check panel dashboard for restrictions`
-      },
-      {
-        name: '🔍 Technical Details',
-        value: `Action: ${action}\nThis restriction is set by your hosting provider, not this bot.`
-      }
-    )
-    .setFooter({ text: 'Contact your hosting provider if you believe this is an error' })
-    .setTimestamp();
-}
-
-function createErrorEmbed(title, error, context = {}) {
+// Create a simple error embed
+function createErrorEmbed(title, description, options = {}) {
   const embed = new EmbedBuilder()
-    .setColor('#ff0000')
-    .setTitle(`❌ ${title}`)
-    .setDescription('An error occurred while processing your request.')
-    .addFields(
-      { name: '🔴 Error Message', value: `\`\`\`${error.message || 'Unknown error'}\`\`\`` }
-    )
+    .setColor(options.color || '#ff0000')
+    .setTitle(title)
+    .setDescription(description)
     .setTimestamp();
 
-  if (context.serverId) {
-    embed.addFields({ name: '🖥️ Server ID', value: `\`${context.serverId}\``, inline: true });
+  if (options.footer) {
+    embed.setFooter({ text: options.footer });
   }
-  if (context.action) {
-    embed.addFields({ name: '⚡ Action', value: context.action, inline: true });
-  }
-
-  const troubleshooting = [];
-
-  if (error.message?.includes('not found')) {
-    troubleshooting.push('• Verify the server/resource ID is correct');
-    troubleshooting.push('• The resource may have been deleted');
-  }
-
-  if (error.message?.includes('offline') || error.message?.includes('running')) {
-    troubleshooting.push('• Check if the server is in the correct state');
-    troubleshooting.push('• Some actions require the server to be stopped/running');
-  }
-
-  if (error.message?.includes('timeout')) {
-    troubleshooting.push('• The panel may be experiencing high load');
-    troubleshooting.push('• Try again in a few moments');
-  }
-
-  if (troubleshooting.length > 0) {
-    embed.addFields({ name: '💡 Troubleshooting', value: troubleshooting.join('\n') });
-  }
-
-  embed.setFooter({ text: 'If this error persists, contact your hosting provider' });
 
   return embed;
 }
 
+// Main API error handler with specific embeds for each error
 function handleApiError(error, featureName, action, context = {}) {
-  if (isFeatureDisabledError(error)) {
-    return createFeatureDisabledEmbed(featureName, action);
-  }
-
   const errorMsg = error.message?.toLowerCase() || '';
+  const statusCode = error.statusCode || 0;
+  const errorCode = error.code || '';
 
-  if (errorMsg.includes('limit') || errorMsg.includes('maximum')) {
-    return new EmbedBuilder()
-      .setColor('#ff9900')
-      .setTitle('⚠️ Limit Reached')
-      .setDescription(`You have reached the maximum ${featureName.toLowerCase()} limit.`)
-      .addFields(
-        { name: '📊 What does this mean?', value: `Your hosting plan has a limit on the number of ${featureName.toLowerCase()}s you can create.` },
-        { name: '💡 Solutions', value: `• Delete unused ${featureName.toLowerCase()}s to free up space\n• Upgrade your hosting plan\n• Contact your provider to increase limits` },
-        { name: '🔍 Error Details', value: `\`\`\`${error.message}\`\`\`` }
-      )
-      .setFooter({ text: 'Check your panel dashboard for current usage' })
-      .setTimestamp();
+  // ============================================
+  // AUTHENTICATION ERRORS (401)
+  // ============================================
+  if (statusCode === 401 || errorCode === 'InvalidCredentialsException') {
+    return createErrorEmbed(
+      '🔒 Invalid API Key',
+      'Your API key is invalid or has expired. Re-link your panel using `/panel link`.',
+      { color: '#ff6600' }
+    );
   }
 
-  if (errorMsg.includes('must be stopped') || errorMsg.includes('must be offline')) {
-    return new EmbedBuilder()
-      .setColor('#ff9900')
-      .setTitle('⚠️ Invalid Server State')
-      .setDescription('This action requires the server to be in a specific state.')
-      .addFields(
-        { name: '🔴 Required State', value: 'Server must be **stopped/offline**' },
-        { name: '💡 What to do', value: '• Stop the server first using `/server stop`\n• Wait for server to fully stop\n• Try the action again' },
-        { name: '🔍 Error Details', value: `\`\`\`${error.message}\`\`\`` }
-      )
-      .setTimestamp();
+  // ============================================
+  // PERMISSION ERRORS (403)
+  // ============================================
+  if (statusCode === 403 || errorCode === 'InsufficientPermissionsException') {
+    return createErrorEmbed(
+      '🔒 Permission Denied',
+      'You don\'t have permission to perform this action. Contact your hosting provider or server owner.',
+      { color: '#ff6600' }
+    );
   }
 
-  if (errorMsg.includes('must be running') || errorMsg.includes('must be online')) {
-    return new EmbedBuilder()
-      .setColor('#ff9900')
-      .setTitle('⚠️ Invalid Server State')
-      .setDescription('This action requires the server to be running.')
-      .addFields(
-        { name: '🟢 Required State', value: 'Server must be **running/online**' },
-        { name: '💡 What to do', value: '• Start the server first using `/server start`\n• Wait for server to fully start\n• Try the action again' },
-        { name: '🔍 Error Details', value: `\`\`\`${error.message}\`\`\`` }
-      )
-      .setTimestamp();
+  // ============================================
+  // NOT FOUND ERRORS (404)
+  // ============================================
+  if (errorCode === 'UserNotFoundException') {
+    return createErrorEmbed(
+      '❌ User Not Found',
+      'No user with that email address was found. Make sure the user has a Pterodactyl panel account.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (statusCode === 404 || errorCode === 'NotFoundHttpException') {
+    return createErrorEmbed(
+      '❌ Resource Not Found',
+      'The requested resource could not be found. It may have been deleted or the ID is incorrect.',
+      { color: '#ff0000' }
+    );
   }
 
   if (errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
-    return new EmbedBuilder()
-      .setColor('#ff0000')
-      .setTitle('❌ Resource Not Found')
-      .setDescription('The requested resource could not be found.')
-      .addFields(
-        { name: '🔍 Possible Reasons', value: '• The resource ID is incorrect\n• The resource was deleted\n• You don\'t have access to this resource' },
-        { name: '💡 What to do', value: '• Double-check the ID\n• Use autocomplete to select from available resources\n• Verify you have the correct panel selected' },
-        { name: '🔍 Error Details', value: `\`\`\`${error.message}\`\`\`` }
-      )
-      .setTimestamp();
+    return createErrorEmbed(
+      '❌ Not Found',
+      error.message || 'The requested resource could not be found.',
+      { color: '#ff0000' }
+    );
   }
 
-  return createErrorEmbed(`${featureName} Error`, error, context);
-}
-
-function createSuccessEmbed(title, description, fields = []) {
-  const embed = new EmbedBuilder()
-    .setColor('#00ff00')
-    .setTitle(`✅ ${title}`)
-    .setDescription(description)
-    .setTimestamp();
-
-  if (fields.length > 0) {
-    embed.addFields(fields);
+  // ============================================
+  // CONFLICT ERRORS (409)
+  // ============================================
+  if (errorCode === 'AllocationNotAvailableException') {
+    return createErrorEmbed(
+      '🌐 Allocation Unavailable',
+      'The requested IP:Port allocation is not available or already in use. Try selecting a different port.',
+      { color: '#ff9900' }
+    );
   }
 
-  return embed;
-}
-
-function createWarningEmbed(title, description, fields = []) {
-  const embed = new EmbedBuilder()
-    .setColor('#ffaa00')
-    .setTitle(`⚠️ ${title}`)
-    .setDescription(description)
-    .setTimestamp();
-
-  if (fields.length > 0) {
-    embed.addFields(fields);
+  if (errorCode === 'UserAlreadyHasAccessException') {
+    return createErrorEmbed(
+      '👥 User Already Added',
+      'This user already has access to the server. You can update their permissions instead of adding them again.',
+      { color: '#ff9900' }
+    );
   }
 
-  return embed;
+  if (errorCode === 'ConflictingServerStateException') {
+    return createErrorEmbed(
+      '⚠️ Server Busy',
+      'The server is currently processing another task. Wait for it to complete and try again.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (statusCode === 409) {
+    return createErrorEmbed(
+      '⚠️ Operation Conflict',
+      error.message || 'This operation conflicts with the current server state.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // VALIDATION ERRORS (422)
+  // ============================================
+  if (statusCode === 422 || errorCode === 'ValidationException') {
+    return createErrorEmbed(
+      '⚠️ Validation Error',
+      error.message + '\n\nCheck your input values and ensure all required fields are correct.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // RATE LIMIT ERRORS (429)
+  // ============================================
+  if (statusCode === 429) {
+    return createErrorEmbed(
+      '⏱️ Rate Limited',
+      'Too many requests. Please wait a moment before trying again.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // SERVICE UNAVAILABLE (503)
+  // ============================================
+  if (statusCode === 503 || errorCode === 'NoAvailableAllocationsException') {
+    return createErrorEmbed(
+      '🌐 No Allocations Available',
+      'There are no available IP:Port allocations on this node. Contact your hosting provider to add more ports.',
+      { color: '#ff0000' }
+    );
+  }
+
+  // ============================================
+  // STORAGE ERRORS (507)
+  // ============================================
+  if (statusCode === 507 || errorCode === 'InsufficientStorageException') {
+    return createErrorEmbed(
+      '💾 Insufficient Storage',
+      'Not enough storage space available. Delete old files or backups, or contact your provider to increase storage.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (errorMsg.includes('insufficient storage')) {
+    return createErrorEmbed(
+      '💾 Storage Full',
+      'The server has run out of storage space. Delete old files or backups to free up space.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (errorMsg.includes('not enough storage')) {
+    return createErrorEmbed(
+      '💾 Storage Limit Exceeded',
+      'There is not enough storage space to complete this operation. Contact your hosting provider.',
+      { color: '#ff0000' }
+    );
+  }
+
+  // ============================================
+  // SERVER ERRORS (500+)
+  // ============================================
+  if (statusCode >= 500) {
+    return createErrorEmbed(
+      '🔥 Panel Server Error',
+      'The panel server encountered an internal error. This is not a bot issue. Try again later or contact your hosting provider.',
+      { color: '#ff0000', footer: 'This is a panel error, not a bot issue' }
+    );
+  }
+
+  // ============================================
+  // BACKUP ERRORS
+  // ============================================
+  if (errorCode === 'TooManyBackupsException') {
+    return createErrorEmbed(
+      '💾 Backup Limit Reached',
+      'You\'ve reached the maximum number of backups allowed for this server. Delete old backups or upgrade your plan.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('backup limit')) {
+    return createErrorEmbed(
+      '💾 Too Many Backups',
+      'Maximum backup limit reached. Delete some old backups to create new ones.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorCode === 'BackupIsLockedException') {
+    return createErrorEmbed(
+      '🔒 Backup Locked',
+      'This backup is locked and cannot be deleted. Unlock it first using `/backup lock` before attempting to delete it.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('backup is locked')) {
+    return createErrorEmbed(
+      '🔒 Locked Backup',
+      'This backup is protected and cannot be modified or deleted. Unlock it first.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorCode === 'BackupNotCompletedException') {
+    return createErrorEmbed(
+      '⏳ Backup In Progress',
+      'This backup is still being created. Wait for it to complete before attempting to download or restore it.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('backup not completed')) {
+    return createErrorEmbed(
+      '⏳ Backup Not Ready',
+      'The backup hasn\'t finished yet. Please wait for it to complete.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorCode === 'BackupFailedException') {
+    return createErrorEmbed(
+      '❌ Backup Failed',
+      'The backup creation failed. Try creating a new backup or contact your hosting provider if the issue persists.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (errorMsg.includes('backup failed')) {
+    return createErrorEmbed(
+      '❌ Backup Error',
+      'The backup operation failed to complete successfully. Try again or contact support.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (errorMsg.includes('another backup is in progress')) {
+    return createErrorEmbed(
+      '⏳ Backup Already Running',
+      'Another backup is currently being created. Wait for it to finish before starting a new one.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // ALLOCATION ERRORS
+  // ============================================
+  if (errorCode === 'TooManyAllocationsException') {
+    return createErrorEmbed(
+      '🌐 Allocation Limit Reached',
+      'You\'ve reached the maximum number of IP:Port allocations. Remove unused allocations or upgrade your plan.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('allocation limit')) {
+    return createErrorEmbed(
+      '🌐 Too Many Allocations',
+      'Maximum allocation limit reached. Remove some unused ports to add new ones.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorCode === 'CannotDeletePrimaryAllocationException') {
+    return createErrorEmbed(
+      '🚫 Cannot Delete Primary Allocation',
+      'You cannot delete the primary allocation. Set another allocation as primary first, then delete this one.',
+      { color: '#ff0000' }
+    );
+  }
+
+  if (errorMsg.includes('cannot delete primary')) {
+    return createErrorEmbed(
+      '🚫 Primary Allocation Protected',
+      'The primary allocation cannot be removed. Assign a different allocation as primary first.',
+      { color: '#ff0000' }
+    );
+  }
+
+  // ============================================
+  // SCHEDULE ERRORS
+  // ============================================
+  if (errorCode === 'TooManySchedulesException') {
+    return createErrorEmbed(
+      '📅 Schedule Limit Reached',
+      'You\'ve reached the maximum number of schedules. Delete unused schedules or upgrade your plan.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('schedule limit')) {
+    return createErrorEmbed(
+      '📅 Too Many Schedules',
+      'Maximum schedule limit reached. Remove some old or unused schedules.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('invalid cron')) {
+    return createErrorEmbed(
+      '⚠️ Invalid Cron Expression',
+      'The cron expression you provided is invalid. Check the syntax and try again.\n\nExample: `0 3 * * *` (daily at 3 AM)',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // USER/SUBUSER ERRORS
+  // ============================================
+  if (errorCode === 'TooManySubusersException') {
+    return createErrorEmbed(
+      '👥 Subuser Limit Reached',
+      'You\'ve reached the maximum number of subusers. Remove inactive users or upgrade your plan.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('subuser limit')) {
+    return createErrorEmbed(
+      '👥 Too Many Subusers',
+      'Maximum subuser limit reached. Remove some users to add new ones.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorCode === 'CannotRemoveServerOwnerException') {
+    return createErrorEmbed(
+      '🚫 Cannot Remove Owner',
+      'You cannot remove the server owner from the server. Only subusers can be removed.',
+      { color: '#ff0000' }
+    );
+  }
+
+  // ============================================
+  // DATABASE ERRORS
+  // ============================================
+  if (errorMsg.includes('database limit')) {
+    return createErrorEmbed(
+      '🗄️ Database Limit Reached',
+      'You\'ve reached the maximum number of databases. Delete unused databases or upgrade your plan.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('max databases')) {
+    return createErrorEmbed(
+      '🗄️ Maximum Databases',
+      'No more databases can be created. Remove old databases or contact your provider.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // SERVER STATE ERRORS
+  // ============================================
+  if (errorMsg.includes('must be stopped')) {
+    return createErrorEmbed(
+      '⚠️ Server Must Be Stopped',
+      'This action requires the server to be offline. Stop the server using `/server stop` and try again.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('must be offline')) {
+    return createErrorEmbed(
+      '⚠️ Server Must Be Offline',
+      'The server needs to be stopped before you can perform this action. Use `/server stop` first.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('server must be stopped')) {
+    return createErrorEmbed(
+      '⚠️ Stop Server Required',
+      'Please stop the server before attempting this operation.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('must be running')) {
+    return createErrorEmbed(
+      '⚠️ Server Must Be Running',
+      'This action requires the server to be online. Start the server using `/server start` and try again.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('must be online')) {
+    return createErrorEmbed(
+      '⚠️ Server Must Be Online',
+      'The server needs to be running before you can perform this action. Use `/server start` first.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('installing')) {
+    return createErrorEmbed(
+      '⏳ Server Installing',
+      'The server is currently being installed. Please wait for the installation to complete before performing any actions.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('server is installing')) {
+    return createErrorEmbed(
+      '⏳ Installation In Progress',
+      'Server installation is still in progress. Wait for it to finish.',
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('suspended')) {
+    return createErrorEmbed(
+      '🚫 Server Suspended',
+      'This server has been suspended by your hosting provider. Contact them immediately to resolve this issue.',
+      { color: '#ff0000', footer: 'Contact your hosting provider to resolve suspension' }
+    );
+  }
+
+  if (errorMsg.includes('server is suspended')) {
+    return createErrorEmbed(
+      '🚫 Account Suspended',
+      'Your server is currently suspended. Please contact your hosting provider to restore access.',
+      { color: '#ff0000', footer: 'Contact support immediately' }
+    );
+  }
+
+  if (errorMsg.includes('server is busy')) {
+    return createErrorEmbed(
+      '⚠️ Server Processing',
+      'The server is currently busy processing another task. Please wait a moment and try again.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // GENERIC REQUEST ERRORS
+  // ============================================
+  if (errorCode === 'BadRequestHttpException') {
+    return createErrorEmbed(
+      '⚠️ Invalid Request',
+      error.message + '\n\nCheck your input for typos or invalid characters.',
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // GENERIC LIMIT ERRORS
+  // ============================================
+  if (errorMsg.includes('limit')) {
+    return createErrorEmbed(
+      '⚠️ Limit Reached',
+      `You've reached the maximum ${featureName.toLowerCase()} limit. Contact your provider or upgrade your plan.`,
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('maximum')) {
+    return createErrorEmbed(
+      '⚠️ Maximum Exceeded',
+      `Maximum ${featureName.toLowerCase()} limit has been reached. Remove old items or upgrade your plan.`,
+      { color: '#ff9900' }
+    );
+  }
+
+  if (errorMsg.includes('quota')) {
+    return createErrorEmbed(
+      '⚠️ Quota Exceeded',
+      `Your ${featureName.toLowerCase()} quota has been exceeded. Contact your provider for more resources.`,
+      { color: '#ff9900' }
+    );
+  }
+
+  // ============================================
+  // GENERIC FALLBACK
+  // ============================================
+  return createErrorEmbed(
+    `❌ ${featureName} Error`,
+    error.message || 'An unexpected error occurred. Please try again.',
+    { color: '#ff0000' }
+  );
 }
 
 module.exports = {
-  isFeatureDisabledError,
-  createFeatureDisabledEmbed,
-  createErrorEmbed,
   handleApiError,
-  createSuccessEmbed,
-  createWarningEmbed
+  createErrorEmbed
 };

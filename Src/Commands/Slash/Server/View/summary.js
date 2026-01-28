@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../../../../Functions/database');
 const ptero = require('../../../../Functions/pteroService');
+const pteroUtils = require('../../../../Functions/pteroUtils');
 const { handleApiError } = require('../../../../Functions/errorHandler');
 
 module.exports = {
@@ -25,7 +26,7 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      const servers = await ptero.getAllServers(userData.panels);
+      const servers = await pteroUtils.getUserServers(userId);
       if (servers.length === 0) {
         return interaction.editReply('❌ No servers found across your panels.');
       }

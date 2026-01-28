@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../../../Functions/database');
 const ptero = require('../../../Functions/pteroService');
+const pteroUtils = require('../../../Functions/pteroUtils');
 const { createPaginatedEmbed, chunkArray } = require('../../../Functions/pagination');
 const { handleApiError } = require('../../../Functions/errorHandler');
 
@@ -14,42 +14,19 @@ module.exports = {
     .addStringOption(opt => opt.setName('id').setDescription('Server ID').setRequired(true).setAutocomplete(true)),
 
   async autocomplete(interaction) {
-    const userId = interaction.user.id;
-    const userData = await db.getUserData(userId);
-    const selectedPanelName = userData.selectedPanel;
-    const panel = userData.panels.find(p => p.name === selectedPanelName);
-    if (!panel) {
-      return interaction.respond([]);
-    }
-
-    try {
-      const servers = await ptero.listServers(panel.url, panel.apikey);
-      const focusedValue = interaction.options.getFocused().toLowerCase();
-      const filtered = servers
-        .filter(s => s.attributes.name.toLowerCase().includes(focusedValue) || s.attributes.identifier.toLowerCase().includes(focusedValue))
-        .slice(0, 25);
-      await interaction.respond(filtered.map(s => ({
-        name: `${s.attributes.name} (${s.attributes.identifier})`,
-        value: s.attributes.identifier
-      })));
-    } catch (err) {
-      await interaction.respond([]);
-    }
+    await pteroUtils.serverAutocomplete(interaction);
   },
 
   async execute(client, interaction) {
-    const userId = interaction.user.id;
-    const userData = await db.getUserData(userId);
-    const selectedPanelName = userData.selectedPanel;
-    const panel = userData.panels.find(p => p.name === selectedPanelName);
-    if (!panel) {
-      return interaction.reply({ content: "❌ You don't have an active panel selected.", ephemeral: true });
-    }
-
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      const serverId = interaction.options.getString('id');
+      const resolved = await pteroUtils.resolveServer(interaction);
+      if (!resolved) {
+        return interaction.editReply({ content: '❌ Server not found or panel connection failed.', ephemeral: true });
+      }
+
+      const { panel, serverId } = resolved;
       const databases = await ptero.listDatabases(panel.url, panel.apikey, serverId);
 
       if (databases.length === 0) {

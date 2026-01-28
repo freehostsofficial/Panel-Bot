@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const db = require('../../../Functions/database');
 const ptero = require('../../../Functions/pteroService');
+const pteroUtils = require('../../../Functions/pteroUtils');
 const { handleApiError } = require('../../../Functions/errorHandler');
 
 module.exports = {
@@ -14,42 +14,16 @@ module.exports = {
     .addStringOption(opt => opt.setName('backup').setDescription('Backup UUID').setRequired(true)),
 
   async autocomplete(interaction) {
-    const userId = interaction.user.id;
-    const userData = await db.getUserData(userId);
-    const selectedPanelName = userData.selectedPanel;
-    const panel = userData.panels.find(p => p.name === selectedPanelName);
-    if (!panel) {
-      return interaction.respond([]);
-    }
-
-    const focusedOption = interaction.options.getFocused(true);
-    if (focusedOption.name === 'id') {
-      try {
-        const servers = await ptero.listServers(panel.url, panel.apikey);
-        const filtered = servers
-          .filter(s => s.attributes.name.toLowerCase().includes(focusedOption.value.toLowerCase()) ||
-                        s.attributes.identifier.toLowerCase().includes(focusedOption.value.toLowerCase()))
-          .slice(0, 25);
-        await interaction.respond(filtered.map(s => ({
-          name: `${s.attributes.name} (${s.attributes.identifier})`,
-          value: s.attributes.identifier
-        })));
-      } catch (err) {
-        await interaction.respond([]);
-      }
-    }
+    await pteroUtils.serverAutocomplete(interaction);
   },
 
   async execute(client, interaction) {
-    const userId = interaction.user.id;
-    const userData = await db.getUserData(userId);
-    const selectedPanelName = userData.selectedPanel;
-    const panel = userData.panels.find(p => p.name === selectedPanelName);
-    if (!panel) {
-      return interaction.reply({ content: '❌ No active bridge found. Use `/panel select`.', ephemeral: true });
+    const resolved = await pteroUtils.resolveServer(interaction);
+    if (!resolved) {
+      return interaction.reply({ content: '❌ Server not found or panel connection failed.', ephemeral: true });
     }
 
-    const serverId = interaction.options.getString('id');
+    const { panel, serverId } = resolved;
     const backupId = interaction.options.getString('backup');
 
     const embed = new EmbedBuilder()
