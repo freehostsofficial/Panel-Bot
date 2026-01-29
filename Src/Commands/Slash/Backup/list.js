@@ -58,12 +58,26 @@ module.exports = {
             month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
           });
 
-          const statusIcon = attr.is_successful ? '✅' : '❌';
+          // Check completion status
+          const isCompleted = attr.completed_at !== null;
+          let statusIcon = '✅';
+          let statusText = 'Success';
+
+          if (!isCompleted) {
+            statusIcon = '⏳';
+            statusText = 'In Progress';
+          } else if (!attr.is_successful) {
+            statusIcon = '❌';
+            statusText = 'Failed';
+          }
+
           const lockIcon = attr.is_locked ? '🔒' : '🔓';
+          const ignoredCount = attr.ignored_files ? attr.ignored_files.length : 0;
+          const ignoredText = ignoredCount > 0 ? `\nIgnored: ${ignoredCount} pattern(s)` : '';
 
           embed.addFields({
             name: `${attr.name || 'Unnamed Snapshot'}`,
-            value: `\`\`\`yml\nStatus: ${statusIcon} ${attr.is_successful ? 'Success' : 'Failed'}\nSecurity: ${lockIcon} ${attr.is_locked ? 'Locked' : 'Unlocked'}\nSize: ${size} MB\nDate: ${date}\nUUID: ${attr.uuid.substring(0, 8)}...\n\`\`\``,
+            value: `\`\`\`yml\nStatus: ${statusIcon} ${statusText}\nSecurity: ${lockIcon} ${attr.is_locked ? 'Locked' : 'Unlocked'}\nSize: ${size} MB\nDate: ${date}\nUUID: ${attr.uuid.substring(0, 8)}...${ignoredText}\n\`\`\``,
             inline: true
           });
         });

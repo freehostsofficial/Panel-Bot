@@ -38,7 +38,7 @@ module.exports = {
         .addFields(
           { name: '🗄️ Database Instance', value: `\`${updatedDb.database}\``, inline: true },
           { name: '👤 Username', value: `\`${updatedDb.username}\``, inline: true },
-          { name: '🔑 New Password', value: '||Password is specified via API/Panel||', inline: false },
+          { name: '🔑 New Password', value: `\`\`\`bash\n${updatedDb.password}\n\`\`\``, inline: false },
           {
             name: '🛡️ Action Required',
             value: '1. Record the new password immediately.\n2. Update all application `.env` or config files.\n3. Restart connected services.\n*The old password is now invalid.*',

@@ -45,7 +45,7 @@ module.exports = {
           },
           {
             name: '🔑 System Access',
-            value: '```\nPassword: Specified during create/API call\n```*You must record your credentials now. For security, passwords cannot be retrieved post-provisioning.*',
+            value: `\`\`\`bash\nPassword: ${newDb.password} \n\`\`\`\n**⚠️ SAVE THIS PASSWORD NOW.** It cannot be viewed again.`,
             inline: false
           }
         )

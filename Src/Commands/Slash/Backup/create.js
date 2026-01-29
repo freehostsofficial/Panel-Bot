@@ -11,7 +11,8 @@ module.exports = {
     .setName('create')
     .setDescription('Initiate a high-integrity environmental snapshot.')
     .addStringOption(opt => opt.setName('id').setDescription('Server ID').setRequired(true).setAutocomplete(true))
-    .addStringOption(opt => opt.setName('name').setDescription('Optional descriptive label')),
+    .addStringOption(opt => opt.setName('name').setDescription('Optional descriptive label'))
+    .addStringOption(opt => opt.setName('ignored').setDescription('Files/patterns to ignore (comma separated, e.g. *.log, temp/*)')),
 
   async autocomplete(interaction) {
     await pteroUtils.serverAutocomplete(interaction);
@@ -28,8 +29,10 @@ module.exports = {
 
       const { panel, serverId } = resolved;
       const name = interaction.options.getString('name');
+      const ignoredInput = interaction.options.getString('ignored');
+      const ignored = ignoredInput ? ignoredInput.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
 
-      const backup = await ptero.createBackup(panel.url, panel.apikey, serverId, name);
+      const backup = await ptero.createBackup(panel.url, panel.apikey, serverId, name, ignored);
 
       const embed = new EmbedBuilder()
         .setColor('#2ECC71')
@@ -39,7 +42,7 @@ module.exports = {
           { name: '📓 Label', value: backup.name || '*Auto-generated*', inline: true },
           { name: '🆔 Snapshot ID', value: `\`${backup.uuid.substring(0, 8)}\``, inline: true },
           { name: '⏳ Status', value: 'Data Collection In Progress', inline: true },
-          { name: '📋 Process Details', value: `\`\`\`yml\nTrigger: API Call\nTarget: ${serverId}\nPanel: ${panel.name}\nLog: Snapshot compression started.\n\`\`\`*Large servers may take 10-20 minutes to complete.*`, inline: false }
+          { name: '📋 Process Details', value: `\`\`\`yml\nTrigger: API Call\nTarget: ${serverId}\nPanel: ${panel.name}\nIgnored: ${ignored.length > 0 ? ignored.join(', ') : 'None'}\nLog: Snapshot compression started.\n\`\`\`*Large servers may take 10-20 minutes to complete.*`, inline: false }
         )
         .setFooter({ text: `Panel: ${panel.name} • Monitor progress with /backup list` })
         .setTimestamp();

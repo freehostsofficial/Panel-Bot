@@ -490,7 +490,23 @@ function handleApiError(error, featureName, action, context = {}) {
   );
 }
 
+// Create a simple success embed
+function createSuccessEmbed(title, description, fields = []) {
+  const embed = new EmbedBuilder()
+    .setColor('#2ECC71')
+    .setTitle(`✅ ${title}`)
+    .setDescription(description)
+    .setTimestamp();
+
+  if (fields.length > 0) {
+    embed.addFields(fields);
+  }
+
+  return embed;
+}
+
 module.exports = {
   handleApiError,
-  createErrorEmbed
+  createErrorEmbed,
+  createSuccessEmbed
 };
