@@ -227,7 +227,7 @@ class PteroService {
   constructor() {
     this.cache = new SimpleCache();
     this.requestTimeout = 30000; // 30 seconds
-    this.maxRetries = 3;
+    this.maxRetries = 1;
     this.retryDelay = 1000; // 1 second
   }
 
@@ -478,7 +478,7 @@ class PteroService {
       if (cached) return cached;
     }
 
-    const data = await this._request(url, key, 'GET', '/', null, false, 0, options);
+    const data = await this._request(url, key, 'GET', '', null, false, 0, options);
     const servers = data.data || [];
 
     // Cache for 30 seconds
