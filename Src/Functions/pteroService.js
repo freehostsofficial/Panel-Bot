@@ -1,9 +1,193 @@
-const { request, Agent } = require('undici');
+const { Agent } = require('undici');
+const { request } = require('undici');
+
+/**
+ * Custom error class for Pterodactyl API errors with user-friendly messages
+ */
+class PteroError extends Error {
+  constructor(message, statusCode, code, endpoint, method, originalError = null) {
+    super(message);
+    this.name = 'PteroError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.endpoint = endpoint;
+    this.method = method;
+    this.originalError = originalError;
+    this.pterodactylError = true;
+    this.timestamp = new Date().toISOString();
+
+    // Generate user-friendly message
+    this.userMessage = this._getUserMessage();
+  }
+
+  _getUserMessage() {
+    // Network/Connection errors
+    if (this.code === 'ECONNREFUSED') {
+      return '❌ Unable to connect to the panel. Please check if the panel URL is correct and the panel is online.';
+    }
+    if (this.code === 'ETIMEDOUT' || this.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      return '⏱️ Connection timed out. The panel is taking too long to respond. Please try again later.';
+    }
+    if (this.code === 'ENOTFOUND' || this.code === 'UND_ERR_CONNECT') {
+      return '🔍 Panel not found. Please verify the panel URL is correct.';
+    }
+    if (this.code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || this.code === 'CERT_HAS_EXPIRED') {
+      return '🔒 SSL certificate error. The panel has an invalid or expired certificate.';
+    }
+
+    // HTTP Status Code errors
+    switch (this.statusCode) {
+      case 400:
+        return this._get400Message();
+      case 401:
+        return '🔑 Authentication failed. Your API key is invalid or has expired. Please check your panel credentials.';
+      case 403:
+        return this._get403Message();
+      case 404:
+        return this._get404Message();
+      case 409:
+        return this._get409Message();
+      case 422:
+        return this._get422Message();
+      case 429:
+        return '⏳ Too many requests. Please wait a moment before trying again (rate limit exceeded).';
+      case 500:
+        return '⚠️ Panel server error. The Pterodactyl panel encountered an internal error. Please try again later.';
+      case 502:
+        return '🚧 Bad gateway. The panel is temporarily unavailable. Please try again later.';
+      case 503:
+        return '🛠️ Service unavailable. The panel is currently down for maintenance or experiencing issues.';
+      case 504:
+        return '⏱️ Gateway timeout. The panel is taking too long to respond. Please try again.';
+      default:
+        if (this.statusCode >= 500) {
+          return `⚠️ Panel server error (${this.statusCode}). Please contact the panel administrator.`;
+        }
+        if (this.statusCode >= 400) {
+          return `❌ Request failed (${this.statusCode}): ${this.message}`;
+        }
+    }
+
+    // Default message
+    return this.message || '❌ An unexpected error occurred. Please try again.';
+  }
+
+  _get400Message() {
+    // Specific 400 error codes
+    if (this.code === 'InvalidEmailException') {
+      return '📧 Invalid email address. Please provide a valid email address.';
+    }
+    if (this.code === 'InvalidPasswordProvidedException') {
+      return '🔑 Incorrect password. The password you provided is invalid.';
+    }
+    if (this.code === 'TwoFactorAuthenticationTokenInvalid') {
+      return '🔢 Invalid 2FA code. Please check your authenticator app and try again.';
+    }
+    if (this.code === 'BadRequestHttpException') {
+      return '❌ Invalid request. Please check your input and try again.';
+    }
+    return '❌ Bad request. The provided data is invalid or incomplete.';
+  }
+
+  _get403Message() {
+    if (this.code === 'InsufficientPermissionsException') {
+      return '🚫 Insufficient permissions. You don\'t have the required permissions to perform this action.';
+    }
+    if (this.code === 'TwoFactorAuthRequiredException') {
+      return '🔐 Two-factor authentication required. Please enable 2FA to continue.';
+    }
+    if (this.code === 'AccountNotVerifiedException') {
+      return '📧 Account not verified. Please verify your email address.';
+    }
+    if (this.endpoint.includes('/backup') && this.method === 'POST') {
+      return '💾 Backup limit reached. You\'ve reached the maximum number of backups for this server.';
+    }
+    if (this.endpoint.includes('/database') && this.method === 'POST') {
+      return '🗄️ Database limit reached. You\'ve reached the maximum number of databases for this server.';
+    }
+    return '🚫 Access denied. You don\'t have permission to access this resource.';
+  }
+
+  _get404Message() {
+    if (this.code === 'NotFoundHttpException') {
+      if (this.endpoint.includes('/servers/')) {
+        return '🖥️ Server not found. The server doesn\'t exist or you don\'t have access to it.';
+      }
+      if (this.endpoint.includes('/backup')) {
+        return '💾 Backup not found. The requested backup doesn\'t exist.';
+      }
+      if (this.endpoint.includes('/database')) {
+        return '🗄️ Database not found. The requested database doesn\'t exist.';
+      }
+      if (this.endpoint.includes('/schedule')) {
+        return '📅 Schedule not found. The requested schedule doesn\'t exist.';
+      }
+      if (this.endpoint.includes('/users/')) {
+        return '👤 Subuser not found. The requested user doesn\'t exist.';
+      }
+      if (this.endpoint.includes('/files/')) {
+        return '📁 File not found. The requested file doesn\'t exist.';
+      }
+    }
+    return '🔍 Resource not found. The requested item doesn\'t exist or has been deleted.';
+  }
+
+  _get409Message() {
+    if (this.code === 'ConflictingServerStateException') {
+      return '⚠️ Server state conflict. The server must be in a different state to perform this action (e.g., stop server before reinstalling).';
+    }
+    if (this.code === 'ResourceAlreadyExistsException') {
+      return '📝 Resource already exists. An item with this name or identifier already exists.';
+    }
+    if (this.endpoint.includes('/backup') && this.method === 'POST') {
+      return '💾 Backup already in progress. Please wait for the current backup to complete.';
+    }
+    return '⚠️ Conflict detected. The requested action conflicts with the current state.';
+  }
+
+  _get422Message() {
+    if (this.code === 'ValidationException') {
+      return '✏️ Validation failed. Please check your input and ensure all required fields are filled correctly.';
+    }
+    if (this.endpoint.includes('/startup/variable')) {
+      return '⚙️ Invalid startup variable. The value provided doesn\'t match the required format.';
+    }
+    return '✏️ Invalid data provided. Please check your input and try again.';
+  }
+
+  /**
+   * Get a simplified error message for logging
+   */
+  getLogMessage() {
+    return `[${this.statusCode || 'NET'}] ${this.code || 'ERROR'} on ${this.method} ${this.endpoint}: ${this.message}`;
+  }
+
+  /**
+   * Get a detailed error object for debugging
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      userMessage: this.userMessage,
+      statusCode: this.statusCode,
+      code: this.code,
+      endpoint: this.endpoint,
+      method: this.method,
+      timestamp: this.timestamp,
+      originalError: this.originalError ? {
+        message: this.originalError.message,
+        code: this.originalError.code
+      } : null
+    };
+  }
+}
 
 const agent = new Agent({
-  allowH2: true,
-  h2c: true,
-  keepAliveTimeout: 10000,
+  connect: {
+    rejectUnauthorized: false,
+    timeout: 10000
+  },
   keepAliveMaxTimeout: 60000
 });
 
@@ -119,17 +303,19 @@ class PteroService {
    * Internal request handler with retry logic
    * @private
    */
-  async _request(url, key, method = 'GET', endpoint = '/', data = null, isRaw = false, retryCount = 0) {
+  async _request(url, key, method = 'GET', endpoint = '/', data = null, isRaw = false, retryCount = 0, requestOptions = {}) {
     this._validateUrl(url);
     this._validateApiKey(key);
 
     const fullUrl = `${url.replace(/\/$/, '')}/api/client${endpoint}`;
+    const timeout = requestOptions.timeout || this.requestTimeout;
+
     const options = {
       method,
       dispatcher: agent,
 
-      headersTimeout: this.requestTimeout,
-      bodyTimeout: this.requestTimeout,
+      headersTimeout: timeout,
+      bodyTimeout: timeout,
       headers: {
         'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
@@ -173,18 +359,22 @@ class PteroService {
           || `Request failed with status ${response.statusCode}`;
         const errorCode = errorData?.errors?.[0]?.code || null;
 
-        // Create structured error
-        const error = new Error(errorDetail);
-        error.statusCode = response.statusCode;
-        error.code = errorCode;
-        error.pterodactylError = true;
-        error.endpoint = endpoint;
-        error.method = method;
+        // Create structured PteroError
+        const error = new PteroError(
+          errorDetail,
+          response.statusCode,
+          errorCode,
+          endpoint,
+          method
+        );
+
+        // Log the error for debugging
+        console.error(`[PTERO ERROR] ${error.getLogMessage()}`);
 
         // Retry logic for retryable errors
         if (this._isRetryableError(error) && retryCount < this.maxRetries) {
           const delay = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
-          console.warn(`[PTERO] Request failed (${error.statusCode}), retrying in ${delay}ms... (Attempt ${retryCount + 1}/${this.maxRetries})`);
+          console.warn(`[PTERO] Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${this.maxRetries})`);
           await this._sleep(delay);
           return this._request(url, key, method, endpoint, data, isRaw, retryCount + 1);
         }
@@ -206,63 +396,51 @@ class PteroService {
       }
 
     } catch (error) {
-      // If already a structured error, re-throw
+      // If already a PteroError, re-throw
       if (error.pterodactylError) {
         throw error;
       }
 
-      // Handle connection errors
-      if (error.code === 'ECONNREFUSED') {
-        const connError = new Error('Unable to connect to the panel. Please check the panel URL and ensure it is accessible.');
-        connError.statusCode = 503;
-        connError.code = 'ECONNREFUSED';
-        throw connError;
-      }
+      // Handle network errors with PteroError
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND' || error.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+        error.code === 'UND_ERR_CONNECT' || error.code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+        error.code === 'CERT_HAS_EXPIRED' || error.code === 'ECONNRESET') {
 
-      if (error.code === 'ETIMEDOUT') {
-        const connError = new Error('Connection timeout. The panel may be slow or unreachable.');
-        connError.statusCode = 504;
-        connError.code = 'ETIMEDOUT';
+        const pteroError = new PteroError(
+          error.message,
+          null,
+          error.code,
+          endpoint,
+          method,
+          error
+        );
 
-        // Retry on timeout
+        console.error(`[PTERO ERROR] ${pteroError.getLogMessage()}`);
+
+        // Retry network errors
         if (retryCount < this.maxRetries) {
           const delay = this.retryDelay * Math.pow(2, retryCount);
-          console.warn(`[PTERO] Request timed out, retrying in ${delay}ms... (Attempt ${retryCount + 1}/${this.maxRetries})`);
+          console.warn(`[PTERO] Network error, retrying in ${delay}ms... (Attempt ${retryCount + 1}/${this.maxRetries})`);
           await this._sleep(delay);
           return this._request(url, key, method, endpoint, data, isRaw, retryCount + 1);
         }
 
-        throw connError;
+        throw pteroError;
       }
 
-      if (error.code === 'ENOTFOUND') {
-        const connError = new Error('Panel domain not found. Please check the panel URL.');
-        connError.statusCode = 404;
-        connError.code = 'ENOTFOUND';
-        throw connError;
-      }
+      // Wrap unknown errors in PteroError
+      const pteroError = new PteroError(
+        error.message || 'Unknown error occurred',
+        null,
+        error.code || 'UNKNOWN_ERROR',
+        endpoint,
+        method,
+        error
+      );
 
-      if (error.code === 'ECONNRESET') {
-        const connError = new Error('Connection was reset. The panel may have closed the connection unexpectedly.');
-        connError.statusCode = 503;
-        connError.code = 'ECONNRESET';
-
-        // Retry on connection reset
-        if (retryCount < this.maxRetries) {
-          const delay = this.retryDelay * Math.pow(2, retryCount);
-          console.warn(`[PTERO] Connection reset, retrying in ${delay}ms... (Attempt ${retryCount + 1}/${this.maxRetries})`);
-          await this._sleep(delay);
-          return this._request(url, key, method, endpoint, data, isRaw, retryCount + 1);
-        }
-
-        throw connError;
-      }
-
-      // Re-throw other errors with context
-      const contextError = new Error(`Connection error: ${error.message}`);
-      contextError.originalError = error;
-      contextError.endpoint = endpoint;
-      throw contextError;
+      console.error(`[PTERO ERROR] ${pteroError.getLogMessage()}`);
+      throw pteroError;
     }
   }
 
@@ -281,7 +459,8 @@ class PteroService {
     } catch (error) {
       return {
         valid: false,
-        error: error.message,
+        error: error.userMessage || error.message,
+        errorCode: error.code,
         statusCode: error.statusCode
       };
     }
@@ -291,7 +470,7 @@ class PteroService {
    * List all servers accessible to the user
    * @param {boolean} useCache - Whether to use cached results
    */
-  async listServers(url, key, useCache = true) {
+  async listServers(url, key, useCache = true, options = {}) {
     const cacheKey = `servers:${url}:${key}`;
 
     if (useCache) {
@@ -299,7 +478,7 @@ class PteroService {
       if (cached) return cached;
     }
 
-    const data = await this._request(url, key, 'GET', '/');
+    const data = await this._request(url, key, 'GET', '/', null, false, 0, options);
     const servers = data.data || [];
 
     // Cache for 30 seconds
@@ -311,8 +490,9 @@ class PteroService {
   /**
    * List all servers from all provided panels
    * @param {Array} panels - Array of panel objects with url and apikey
+   * @param {Object} options - Request options (e.g. { timeout: 2000 })
    */
-  async getAllServers(panels) {
+  async getAllServers(panels, options = {}) {
     if (!Array.isArray(panels) || panels.length === 0) {
       return [];
     }
@@ -325,7 +505,7 @@ class PteroService {
         }
 
         try {
-          const servers = await this.listServers(panel.url, panel.apikey);
+          const servers = await this.listServers(panel.url, panel.apikey, true, options);
           return servers.map(s => ({ ...s, panel }));
         } catch (error) {
           console.error(`[PTERO] Failed to fetch servers from panel ${panel.name || panel.url}:`, error.message);
@@ -1111,6 +1291,378 @@ class PteroService {
 
     await this._request(url, key, 'DELETE', `/servers/${serverId}/users/${subuserId}`);
     return true;
+  }
+
+  /**
+   * Get specific subuser details
+   */
+  async getSubuser(url, key, serverId, subuserId) {
+    this._validateServerId(serverId);
+
+    if (!subuserId || typeof subuserId !== 'string') {
+      throw new Error('Subuser ID must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'GET', `/servers/${serverId}/users/${subuserId}`);
+    return data.attributes;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ACCOUNT MANAGEMENT
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Get account details
+   */
+  async getAccountDetails(url, key) {
+    const data = await this._request(url, key, 'GET', '/account');
+    return data.attributes;
+  }
+
+  /**
+   * Get all API keys for the account
+   */
+  async getApiKeys(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/api-keys');
+    return data.data || [];
+  }
+
+  /**
+   * Create a new API key
+   */
+  async createApiKey(url, key, description, allowedIps = []) {
+    const payload = {
+      description: description,
+      allowed_ips: Array.isArray(allowedIps) ? allowedIps : []
+    };
+
+    const data = await this._request(url, key, 'POST', '/account/api-keys', payload);
+    return data.attributes;
+  }
+
+  /**
+   * Delete an API key
+   */
+  async deleteApiKey(url, key, identifier) {
+    if (!identifier || typeof identifier !== 'string') {
+      throw new Error('API key identifier must be a non-empty string');
+    }
+
+    await this._request(url, key, 'DELETE', `/account/api-keys/${identifier}`);
+    return true;
+  }
+
+  /**
+   * Get 2FA QR code image URL
+   */
+  async get2faDetails(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/two-factor');
+    return data.data;
+  }
+
+  /**
+   * Enable two-factor authentication
+   */
+  async enable2fa(url, key, code) {
+    if (!code || typeof code !== 'string') {
+      throw new Error('2FA code must be provided');
+    }
+
+    const payload = { code: code };
+    const data = await this._request(url, key, 'POST', '/account/two-factor', payload);
+    return data.attributes;
+  }
+
+  /**
+   * Disable two-factor authentication
+   */
+  async disable2fa(url, key, password) {
+    if (!password || typeof password !== 'string') {
+      throw new Error('Password must be provided');
+    }
+
+    const payload = { password: password };
+    await this._request(url, key, 'DELETE', '/account/two-factor', payload);
+    return true;
+  }
+
+  /**
+   * Update account email
+   */
+  async updateEmail(url, key, newEmail, password) {
+    if (!newEmail || !password) {
+      throw new Error('Email and password are required');
+    }
+
+    const payload = {
+      email: newEmail,
+      password: password
+    };
+
+    await this._request(url, key, 'PUT', '/account/email', payload);
+    return true;
+  }
+
+  /**
+   * Update account password
+   */
+  async updatePassword(url, key, currentPassword, newPassword, confirmPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      throw new Error('All password fields are required');
+    }
+
+    if (newPassword !== confirmPassword) {
+      throw new Error('New password and confirmation do not match');
+    }
+
+    const payload = {
+      current_password: currentPassword,
+      password: newPassword,
+      password_confirmation: confirmPassword
+    };
+
+    await this._request(url, key, 'PUT', '/account/password', payload);
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // CACHE MANAGEMENT
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Clear server cache for a specific user
+   */
+  clearUserCache(userId) {
+    if (this.cache.has(userId)) {
+      this.cache.delete(userId);
+    }
+  }
+
+  /**
+   * Get backup details
+   */
+  async getBackup(url, key, serverId, backupId) {
+    this._validateServerId(serverId);
+
+    if (!backupId || typeof backupId !== 'string') {
+      throw new Error('Backup ID must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'GET', `/servers/${serverId}/backups/${backupId}`);
+    return data.attributes;
+  }
+
+  /**
+   * Get file download URL
+   */
+  async getFileDownload(url, key, serverId, filePath) {
+    this._validateServerId(serverId);
+
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error('File path must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'GET', `/servers/${serverId}/files/download?file=${encodeURIComponent(filePath)}`);
+    return data.attributes.url;
+  }
+
+  /**
+   * Get all available permissions
+   */
+  async getPermissions(url, key) {
+    const data = await this._request(url, key, 'GET', '/permissions');
+    return data.attributes.permissions;
+  }
+
+  /**
+   * Get server-specific user permissions
+   */
+  async getServerPermissions(url, key, serverId) {
+    this._validateServerId(serverId);
+
+    const data = await this._request(url, key, 'GET', `/servers/${serverId}`);
+    return data.attributes.user_permissions || [];
+  }
+
+  /**
+   * Get account details
+   */
+  async getAccount(url, key) {
+    const data = await this._request(url, key, 'GET', '/account');
+    return data.attributes;
+  }
+
+  /**
+   * Update account email
+   * @param {string} email - New email address
+   * @param {string} password - Current account password for verification
+   */
+  async updateEmail(url, key, email, password) {
+    if (!email || typeof email !== 'string') {
+      throw new Error('Email must be a non-empty string');
+    }
+
+    if (!password || typeof password !== 'string') {
+      throw new Error('Password must be a non-empty string');
+    }
+
+    await this._request(url, key, 'PUT', '/account/email', {
+      email,
+      password
+    });
+    return true;
+  }
+
+  /**
+   * Update account password
+   * @param {string} currentPassword - Current password
+   * @param {string} newPassword - New password
+   * @param {string} passwordConfirmation - New password confirmation
+   */
+  async updatePassword(url, key, currentPassword, newPassword, passwordConfirmation) {
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      throw new Error('Current password must be a non-empty string');
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      throw new Error('New password must be a non-empty string');
+    }
+
+    if (!passwordConfirmation || typeof passwordConfirmation !== 'string') {
+      throw new Error('Password confirmation must be a non-empty string');
+    }
+
+    await this._request(url, key, 'PUT', '/account/password', {
+      current_password: currentPassword,
+      password: newPassword,
+      password_confirmation: passwordConfirmation
+    });
+    return true;
+  }
+
+  /**
+   * Get 2FA QR code data
+   * Returns the QR code URL and secret for setting up 2FA
+   */
+  async get2FACode(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/two-factor');
+    return data.data;
+  }
+
+  /**
+   * Enable two-factor authentication
+   * @param {string} code - 6-digit TOTP code
+   */
+  async enable2FA(url, key, code) {
+    if (!code || typeof code !== 'string') {
+      throw new Error('Code must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'POST', '/account/two-factor', {
+      code
+    });
+    return data.attributes.tokens;
+  }
+
+  /**
+   * Disable two-factor authentication
+   * @param {string} password - Account password for verification
+   */
+  async disable2FA(url, key, password) {
+    if (!password || typeof password !== 'string') {
+      throw new Error('Password must be a non-empty string');
+    }
+
+    await this._request(url, key, 'DELETE', '/account/two-factor', {
+      password
+    });
+    return true;
+  }
+
+  /**
+   * List account API keys
+   */
+  async listApiKeys(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/api-keys');
+    return data.data || [];
+  }
+
+  /**
+   * Create account API key
+   * @param {string} description - Description for the API key
+   * @param {Array} allowedIps - Optional array of allowed IPs
+   */
+  async createApiKey(url, key, description, allowedIps = []) {
+    if (!description || typeof description !== 'string') {
+      throw new Error('Description must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'POST', '/account/api-keys', {
+      description,
+      allowed_ips: Array.isArray(allowedIps) ? allowedIps : []
+    });
+    return data.attributes;
+  }
+
+  /**
+   * Delete account API key
+   */
+  async deleteApiKey(url, key, identifier) {
+    if (!identifier || typeof identifier !== 'string') {
+      throw new Error('API key identifier must be a non-empty string');
+    }
+
+    await this._request(url, key, 'DELETE', `/account/api-keys/${identifier}`);
+    return true;
+  }
+
+  /**
+   * List SSH keys
+   */
+  async listSshKeys(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/ssh-keys');
+    return data.data || [];
+  }
+
+  /**
+   * Create SSH key
+   * @param {string} name - Name for the SSH key
+   * @param {string} publicKey - The public SSH key
+   */
+  async createSshKey(url, key, name, publicKey) {
+    if (!name || typeof name !== 'string') {
+      throw new Error('Name must be a non-empty string');
+    }
+
+    if (!publicKey || typeof publicKey !== 'string') {
+      throw new Error('Public key must be a non-empty string');
+    }
+
+    const data = await this._request(url, key, 'POST', '/account/ssh-keys', {
+      name,
+      public_key: publicKey
+    });
+    return data.attributes;
+  }
+
+  /**
+   * Delete SSH key
+   */
+  async deleteSshKey(url, key, fingerprint) {
+    if (!fingerprint || typeof fingerprint !== 'string') {
+      throw new Error('Fingerprint must be a non-empty string');
+    }
+
+    await this._request(url, key, 'DELETE', `/account/ssh-keys/${fingerprint}`);
+    return true;
+  }
+
+  /**
+   * Get account activity logs
+   */
+  async getAccountActivity(url, key) {
+    const data = await this._request(url, key, 'GET', '/account/activity');
+    return data.data || [];
   }
 
   /**

@@ -14,9 +14,10 @@ module.exports = {
    * Standardizes the output to include panel information
    * @param {string} userId - Discord user ID
    * @param {boolean} useCache - Whether to use cached results (default: true)
+   * @param {Object} options - Extra options (timeout, etc.)
    * @returns {Promise<Array>} Array of server objects with panel information
    */
-  async getUserServers(userId, useCache = true) {
+  async getUserServers(userId, useCache = true, options = {}) {
     if (!userId || typeof userId !== 'string') {
       throw new Error('User ID must be a non-empty string');
     }
@@ -31,7 +32,7 @@ module.exports = {
 
     try {
       const userData = await db.getUserData(userId);
-      
+
       if (!userData || !userData.panels || !Array.isArray(userData.panels)) {
         return [];
       }
@@ -41,11 +42,11 @@ module.exports = {
       }
 
       // Filter out invalid panels
-      const validPanels = userData.panels.filter(panel => 
-        panel && 
-        panel.url && 
-        typeof panel.url === 'string' && 
-        panel.apikey && 
+      const validPanels = userData.panels.filter(panel =>
+        panel &&
+        panel.url &&
+        typeof panel.url === 'string' &&
+        panel.apikey &&
         typeof panel.apikey === 'string'
       );
 
@@ -54,7 +55,14 @@ module.exports = {
         return [];
       }
 
-      const servers = await ptero.getAllServers(validPanels);
+      // Track which panels failed (for logging)
+      const totalPanels = validPanels.length;
+      const servers = await ptero.getAllServers(validPanels, options);
+
+      // Log if some panels failed but others succeeded
+      if (servers.length === 0 && totalPanels > 0) {
+        console.warn(`[PTERO UTILS] User ${userId}: All ${totalPanels} panel(s) failed to return servers`);
+      }
 
       // Cache the results
       if (useCache) {
@@ -84,18 +92,43 @@ module.exports = {
     const userId = interaction.user.id;
 
     try {
-      const servers = await this.getUserServers(userId);
+      // Get user data first to check panels
+      const userData = await db.getUserData(userId);
+
+      if (!userData || !userData.panels || !Array.isArray(userData.panels) || userData.panels.length === 0) {
+        await interaction.respond([{
+          name: 'No panels linked. Use /panel link to add one',
+          value: 'no_panels'
+        }]).catch(() => { });
+        return;
+      }
+
+      // Get servers - with short timeout for autocomplete
+      const servers = await this.getUserServers(userId, true, { timeout: 2500 });
 
       if (!servers || servers.length === 0) {
+        // Check if this is because of errors or just no servers
+        const validPanelsCount = userData.panels.filter(p => p && p.url && p.apikey).length;
+
+        if (validPanelsCount === 0) {
+          await interaction.respond([{
+            name: 'No valid panels configured. Check your panel credentials',
+            value: 'no_valid_panels'
+          }]).catch(() => { });
+          return;
+        }
+
+        // Panels exist but no servers found
         await interaction.respond([{
-          name: 'No servers found. Link a panel using /panel link',
+          name: 'No servers found on any linked panels',
           value: 'no_servers'
-        }]);
+        }]).catch(() => { });
         return;
       }
 
       const focusedValue = interaction.options.getFocused().toLowerCase();
 
+      // Filter and validate server data
       const filtered = servers
         .filter(s => {
           if (!s || !s.attributes || !s.panel) return false;
@@ -105,40 +138,48 @@ module.exports = {
           const panelName = (s.panel.name || '').toLowerCase();
 
           return name.includes(focusedValue) ||
-                 identifier.includes(focusedValue) ||
-                 panelName.includes(focusedValue);
+            identifier.includes(focusedValue) ||
+            panelName.includes(focusedValue);
         })
         .slice(0, 25); // Discord limit
 
       if (filtered.length === 0) {
+        // Provide helpful message when no matches
+        const totalServers = servers.length;
         await interaction.respond([{
-          name: 'No matching servers found',
+          name: `No matches found (${totalServers} server${totalServers !== 1 ? 's' : ''} available)`,
           value: 'no_match'
-        }]);
+        }]).catch(() => { });
         return;
       }
 
+      // Return formatted autocomplete results
       await interaction.respond(filtered.map(s => {
         const serverName = s.attributes.name || 'Unknown Server';
         const serverId = s.attributes.identifier || 'unknown';
         const panelName = s.panel.name || 'Unknown Panel';
-        
+
         // Format: [Panel] Server Name (identifier)
         const displayName = `[${panelName}] ${serverName} (${serverId})`;
-        
+
         return {
           name: displayName.substring(0, 100), // Discord limit
           value: `${panelName}:${serverId}` // Combined format for easy resolution
         };
-      }));
+      })).catch(() => { });
+
     } catch (err) {
       console.error('[PTERO UTILS] Autocomplete error:', err);
-      
-      // Provide user-friendly error message
-      await interaction.respond([{
-        name: 'Error loading servers. Please try again.',
-        value: 'error'
-      }]).catch(console.error);
+
+      // Only show error if we can respond, otherwise silently fail
+      try {
+        await interaction.respond([{
+          name: 'Error loading servers. Try again in a moment',
+          value: 'error'
+        }]);
+      } catch (respondErr) {
+        console.error('[PTERO UTILS] Failed to send autocomplete error:', respondErr);
+      }
     }
   },
 
@@ -154,13 +195,14 @@ module.exports = {
     }
 
     const value = combinedValue || interaction.options.getString('id');
-    
+
     if (!value || typeof value !== 'string') {
       return null;
     }
 
     // Handle special autocomplete values
-    if (value === 'no_servers' || value === 'no_match' || value === 'error') {
+    const invalidValues = ['no_servers', 'no_match', 'error', 'no_panels', 'no_valid_panels'];
+    if (invalidValues.includes(value)) {
       return null;
     }
 
@@ -176,15 +218,15 @@ module.exports = {
       // Check if it's the combined format (panelName:serverId)
       if (value.includes(':')) {
         const parts = value.split(':');
-        
+
         if (parts.length !== 2) {
           console.warn(`[PTERO UTILS] Invalid combined value format: ${value}`);
           return null;
         }
 
         const [panelName, serverId] = parts;
-        
-        const panel = userData.panels.find(p => 
+
+        const panel = userData.panels.find(p =>
           p && p.name === panelName && p.url && p.apikey
         );
 
@@ -198,21 +240,21 @@ module.exports = {
       // Fallback: search for the server ID across all panels
       // (This handles manual copy-pasting of IDs)
       const allServers = await this.getUserServers(userId);
-      
+
       if (!allServers || allServers.length === 0) {
         return null;
       }
 
-      const match = allServers.find(s => 
-        s && 
-        s.attributes && 
+      const match = allServers.find(s =>
+        s &&
+        s.attributes &&
         s.attributes.identifier === value
       );
 
       if (match && match.panel) {
-        return { 
-          panel: match.panel, 
-          serverId: value 
+        return {
+          panel: match.panel,
+          serverId: value
         };
       }
 
@@ -241,10 +283,10 @@ module.exports = {
 
     try {
       const servers = await this.getUserServers(userId);
-      
-      const server = servers.find(s => 
-        s && 
-        s.attributes && 
+
+      const server = servers.find(s =>
+        s &&
+        s.attributes &&
         s.attributes.identifier === serverId
       );
 
@@ -277,7 +319,7 @@ module.exports = {
         return null;
       }
 
-      const panel = userData.panels.find(p => 
+      const panel = userData.panels.find(p =>
         p && p.name === panelName
       );
 
@@ -349,7 +391,7 @@ module.exports = {
         if (!server || !server.panel) return;
 
         const panelName = server.panel.name || 'Unknown Panel';
-        
+
         if (!grouped[panelName]) {
           grouped[panelName] = [];
         }
@@ -505,10 +547,10 @@ module.exports = {
 
     try {
       const userData = await db.getUserData(userId);
-      return !!(userData && 
-                userData.panels && 
-                Array.isArray(userData.panels) && 
-                userData.panels.length > 0);
+      return !!(userData &&
+        userData.panels &&
+        Array.isArray(userData.panels) &&
+        userData.panels.length > 0);
     } catch (error) {
       console.error('[PTERO UTILS] Error checking panels:', error);
       return false;
@@ -567,6 +609,61 @@ module.exports = {
   },
 
   /**
+   * Panel autocomplete for panel management commands
+   * @param {Interaction} interaction - Discord autocomplete interaction
+   */
+  async panelAutocomplete(interaction) {
+    if (!interaction || !interaction.user) {
+      console.error('[PTERO UTILS] Invalid interaction object');
+      return;
+    }
+
+    const userId = interaction.user.id;
+
+    try {
+      const userData = await db.getUserData(userId);
+
+      if (!userData || !userData.panels || userData.panels.length === 0) {
+        await interaction.respond([{
+          name: 'No panels configured. Use /panel add to create one',
+          value: 'no_panels'
+        }]).catch(() => { });
+        return;
+      }
+
+      const focusedValue = interaction.options.getFocused().toLowerCase();
+
+      // Filter panels by name
+      const filtered = userData.panels
+        .filter(p => p.name.toLowerCase().includes(focusedValue))
+        .slice(0, 25)
+        .map(p => {
+          const status = p.active === false ? '❌ ' : '✅ ';
+          return {
+            name: `${status}${p.name}`,
+            value: p.name
+          };
+        });
+
+      if (filtered.length === 0) {
+        await interaction.respond([{
+          name: 'No matching panels found',
+          value: 'no_match'
+        }]).catch(() => { });
+        return;
+      }
+
+      await interaction.respond(filtered).catch(() => { });
+    } catch (err) {
+      console.error('[PTERO UTILS] Panel autocomplete error:', err);
+      await interaction.respond([{
+        name: 'Error loading panels',
+        value: 'error'
+      }]).catch(() => { });
+    }
+  },
+
+  /**
    * Extract panel name from combined value (panelName:serverId)
    * @param {string} combinedValue - Combined value
    * @returns {string|null} Panel name or null
@@ -582,5 +679,175 @@ module.exports = {
     }
 
     return null;
+  },
+
+  /**
+   * Format allocation info for display
+   * @param {Object} allocation - Allocation object
+   * @returns {string} Formatted allocation info
+   */
+  formatAllocation(allocation) {
+    if (!allocation || !allocation.attributes) {
+      return 'Unknown Allocation';
+    }
+
+    const ip = allocation.attributes.ip || 'unknown';
+    const port = allocation.attributes.port || 'unknown';
+    const alias = allocation.attributes.alias || null;
+    const isPrimary = allocation.attributes.is_default || false;
+
+    const primaryBadge = isPrimary ? '⭐ ' : '';
+    const aliasText = alias ? ` (${alias})` : '';
+
+    return `${primaryBadge}${ip}:${port}${aliasText}`;
+  },
+
+  /**
+   * Format subuser info for display
+   * @param {Object} subuser - Subuser object
+   * @returns {string} Formatted subuser info
+   */
+  formatSubuser(subuser) {
+    if (!subuser || !subuser.attributes) {
+      return 'Unknown User';
+    }
+
+    const email = subuser.attributes.email || 'unknown';
+    const uuid = subuser.attributes.uuid || '';
+    const image = subuser.attributes.image || '';
+    const created = subuser.attributes.created_at || '';
+
+    return `**${email}** (${uuid.substring(0, 8)})`;
+  },
+
+  /**
+   * Common server permission sets
+   */
+  PERMISSIONS: {
+    // Control permissions
+    CONTROL_CONSOLE: 'control.console',
+    CONTROL_START: 'control.start',
+    CONTROL_STOP: 'control.stop',
+    CONTROL_RESTART: 'control.restart',
+
+    // File permissions
+    FILE_READ: 'file.read',
+    FILE_READ_CONTENT: 'file.read-content',
+    FILE_CREATE: 'file.create',
+    FILE_UPDATE: 'file.update',
+    FILE_DELETE: 'file.delete',
+    FILE_ARCHIVE: 'file.archive',
+    FILE_SFTP: 'file.sftp',
+
+    // Backup permissions
+    BACKUP_READ: 'backup.read',
+    BACKUP_CREATE: 'backup.create',
+    BACKUP_DELETE: 'backup.delete',
+    BACKUP_DOWNLOAD: 'backup.download',
+    BACKUP_RESTORE: 'backup.restore',
+
+    // Allocation permissions
+    ALLOCATION_READ: 'allocation.read',
+    ALLOCATION_CREATE: 'allocation.create',
+    ALLOCATION_UPDATE: 'allocation.update',
+    ALLOCATION_DELETE: 'allocation.delete',
+
+    // Database permissions
+    DATABASE_READ: 'database.read',
+    DATABASE_CREATE: 'database.create',
+    DATABASE_UPDATE: 'database.update',
+    DATABASE_DELETE: 'database.delete',
+    DATABASE_VIEW_PASSWORD: 'database.view_password',
+
+    // Schedule permissions
+    SCHEDULE_READ: 'schedule.read',
+    SCHEDULE_CREATE: 'schedule.create',
+    SCHEDULE_UPDATE: 'schedule.update',
+    SCHEDULE_DELETE: 'schedule.delete',
+
+    // User permissions
+    USER_READ: 'user.read',
+    USER_CREATE: 'user.create',
+    USER_UPDATE: 'user.update',
+    USER_DELETE: 'user.delete',
+
+    // Settings permissions
+    SETTINGS_RENAME: 'settings.rename',
+    SETTINGS_REINSTALL: 'settings.reinstall',
+    STARTUP_READ: 'startup.read',
+    STARTUP_UPDATE: 'startup.update',
+    STARTUP_DOCKER_IMAGE: 'startup.docker-image',
+
+    // Activity permissions
+    ACTIVITY_READ: 'activity.read',
+
+    // Admin-level access (all permissions)
+    ALL: '*'
+  },
+
+  /**
+   * Get permission set by role name
+   * @param {string} role - Role name (admin, moderator, viewer, developer)
+   * @returns {Array} Array of permission strings
+   */
+  getPermissionsByRole(role) {
+    const P = this.PERMISSIONS;
+
+    switch (role.toLowerCase()) {
+      case 'admin':
+        return [P.ALL];
+
+      case 'moderator':
+        return [
+          P.CONTROL_CONSOLE, P.CONTROL_START, P.CONTROL_STOP, P.CONTROL_RESTART,
+          P.FILE_READ, P.FILE_READ_CONTENT, P.FILE_CREATE, P.FILE_UPDATE,
+          P.BACKUP_READ, P.BACKUP_CREATE,
+          P.DATABASE_READ, P.DATABASE_VIEW_PASSWORD,
+          P.SCHEDULE_READ,
+          P.USER_READ,
+          P.ACTIVITY_READ
+        ];
+
+      case 'viewer':
+        return [
+          P.CONTROL_CONSOLE,
+          P.FILE_READ, P.FILE_READ_CONTENT,
+          P.BACKUP_READ,
+          P.DATABASE_READ,
+          P.SCHEDULE_READ,
+          P.USER_READ,
+          P.ACTIVITY_READ
+        ];
+
+      case 'developer':
+        return [
+          P.CONTROL_CONSOLE, P.CONTROL_START, P.CONTROL_STOP, P.CONTROL_RESTART,
+          P.FILE_READ, P.FILE_READ_CONTENT, P.FILE_CREATE, P.FILE_UPDATE, P.FILE_DELETE,
+          P.FILE_ARCHIVE, P.FILE_SFTP,
+          P.BACKUP_READ, P.BACKUP_CREATE, P.BACKUP_DOWNLOAD,
+          P.DATABASE_READ, P.DATABASE_CREATE, P.DATABASE_UPDATE, P.DATABASE_VIEW_PASSWORD,
+          P.SCHEDULE_READ, P.SCHEDULE_CREATE, P.SCHEDULE_UPDATE,
+          P.STARTUP_READ, P.STARTUP_UPDATE,
+          P.ACTIVITY_READ
+        ];
+
+      default:
+        return [];
+    }
+  },
+
+  /**
+   * Validate permission string
+   * @param {string} permission - Permission string
+   * @returns {boolean} True if valid
+   */
+  isValidPermission(permission) {
+    if (!permission || typeof permission !== 'string') {
+      return false;
+    }
+
+    // Check if it's in the PERMISSIONS list or follows the pattern
+    const validPattern = /^[a-z]+\.[a-z-]+$/;
+    return permission === '*' || validPattern.test(permission);
   }
 };

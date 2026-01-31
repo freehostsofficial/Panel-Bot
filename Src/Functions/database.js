@@ -80,13 +80,65 @@ class DatabaseManager {
     await this._wait();
     const userData = await this.getUserData(userId);
 
-    const existingIndex = userData.panels.findIndex(p => p.name.toLowerCase() === panelData.name.toLowerCase());
+    // Ensure panel has active flag (default true)
+    const panel = {
+      ...panelData,
+      active: panelData.active !== undefined ? panelData.active : true
+    };
+
+    const existingIndex = userData.panels.findIndex(p => p.name.toLowerCase() === panel.name.toLowerCase());
 
     if (existingIndex !== -1) {
-      userData.panels[existingIndex] = { ...userData.panels[existingIndex], ...panelData };
+      userData.panels[existingIndex] = { ...userData.panels[existingIndex], ...panel };
     } else {
-      userData.panels.push(panelData);
+      userData.panels.push(panel);
     }
+
+    this._save();
+    return true;
+  }
+
+  /**
+   * Get a specific panel by name
+   */
+  async getPanelByName(userId, panelName) {
+    await this._wait();
+    const userData = await this.getUserData(userId);
+    return userData.panels.find(p => p.name.toLowerCase() === panelName.toLowerCase()) || null;
+  }
+
+  /**
+   * Get all panels for a user, optionally filtering by active status
+   */
+  async getPanels(userId, activeOnly = false) {
+    await this._wait();
+    const userData = await this.getUserData(userId);
+
+    if (!activeOnly) {
+      return userData.panels;
+    }
+
+    return userData.panels.filter(p => p.active !== false);
+  }
+
+  /**
+   * Update specific fields of a panel
+   */
+  async updatePanel(userId, panelName, updates) {
+    await this._wait();
+    const userData = await this.getUserData(userId);
+
+    const panelIndex = userData.panels.findIndex(p => p.name.toLowerCase() === panelName.toLowerCase());
+
+    if (panelIndex === -1) {
+      return false;
+    }
+
+    // Merge updates into existing panel
+    userData.panels[panelIndex] = {
+      ...userData.panels[panelIndex],
+      ...updates
+    };
 
     this._save();
     return true;
@@ -119,6 +171,9 @@ const db = new DatabaseManager();
 module.exports = {
   getUserData: (userId) => db.getUserData(userId),
   savePanel: (userId, data) => db.savePanel(userId, data),
+  getPanelByName: (userId, panelName) => db.getPanelByName(userId, panelName),
+  getPanels: (userId, activeOnly) => db.getPanels(userId, activeOnly),
+  updatePanel: (userId, panelName, updates) => db.updatePanel(userId, panelName, updates),
   removePanel: (userId, name) => db.removePanel(userId, name),
   isReady: () => db.isReady(),
   instance: db
